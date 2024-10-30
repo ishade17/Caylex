@@ -1,0 +1,3 @@
+[submodule "Enterprise Division/supabase"]
+	path = Enterprise Division/supabase
+	url = https://github.com/supabase/supabase

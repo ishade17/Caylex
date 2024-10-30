@@ -1,3 +1,17 @@
+# Custom Entries
+__pycache__/
+*.py[cod]
+*.egg-info/
+caylex_env/
+env/
+venv/
+*.env
+*.log
+*.pid
+
+
+# GitHub's Comprehensive Python .gitignore Template
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

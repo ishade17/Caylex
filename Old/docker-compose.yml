@@ -1,0 +1,138 @@
+# version: '3.8'
+
+services:
+  # Supabase services
+  kong:
+    image: supabase/kong:latest
+    container_name: supabase-kong
+    restart: unless-stopped
+    environment:
+      KONG_PG_HOST: supabase-db
+      KONG_PG_PASSWORD: ${POSTGRES_PASSWORD}
+      KONG_DATABASE: postgres
+      KONG_PG_USER: postgres
+      KONG_PG_DATABASE: postgres
+    ports:
+      - '8000:8000'  # Kong listens on port 8000
+    depends_on:
+      - supabase-db
+    networks:
+      - supabase-network
+
+  supabase-db:
+    image: supabase/postgres:15.1.0
+    container_name: supabase-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+    ports:
+      - '5432:5432'  # Exposes PostgreSQL on port 5432
+    volumes:
+      - supabase-data:/var/lib/postgresql/data
+      - ./division_schema.sql:/docker-entrypoint-initdb.d/division_schema.sql
+    networks:
+      - supabase-network
+
+  gotrue:
+    image: supabase/gotrue:latest
+    container_name: supabase-gotrue
+    restart: unless-stopped
+    environment:
+      GOTRUE_JWT_SECRET: ${JWT_SECRET}
+      GOTRUE_SITE_URL: http://localhost:8000
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: 9999
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@supabase-db:5432/postgres
+    depends_on:
+      - supabase-db
+    networks:
+      - supabase-network
+
+  # Your application services
+  division-api:
+    build: ./division_api  # Path to your Flask API app
+    container_name: division-api-server
+    restart: unless-stopped
+    ports:
+      - '8001:8000'  # Exposes the API server on port 8001
+    environment:
+      SUPABASE_URL: 'http://kong:8000'  # Supabase API endpoint
+      SUPABASE_KEY: ${SUPABASE_KEY}
+      CENTRAL_API_BASE_URL: ${CENTRAL_API_BASE_URL}
+      OPENAI_KEY: ${OPENAI_KEY}
+      GOOGLE_KEY: ${GOOGLE_KEY}
+      AGENT_COMM_API_URL: ${AGENT_COMM_API_URL}
+      CUSTOMER_AGENT_URL: ${CUSTOMER_AGENT_URL}
+    depends_on:
+      - kong
+    networks:
+      - supabase-network
+
+networks:
+  supabase-network:
+
+volumes:
+  supabase-data:
+
+
+
+
+
+
+
+# services:
+#   division-db:
+#     image: supabase/postgres:15.6.1.101
+#     container_name: division-supabase-db
+#     restart: unless-stopped
+#     environment:
+#       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+#       POSTGRES_DB: postgres
+#       POSTGRES_USER: postgres
+#     ports:
+#       - '54322:5432'  # Exposes PostgreSQL on port 54322
+#     volumes:
+#       - division-supabase-data:/var/lib/postgresql/data
+#       - ./division_schema.sql:/docker-entrypoint-initdb.d/division_schema.sql
+
+#   division-api:
+#     build: ./division_api  # Path to your Flask API app
+#     container_name: division-api-server
+#     restart: unless-stopped
+#     ports:
+#       - '8001:8000'  # Exposes the API server on port 8001
+#     environment:
+#       SUPABASE_URL: 'postgresql://postgres:${POSTGRES_PASSWORD}@division-db:5432/postgres'
+#       SUPABASE_KEY: ${SUPABASE_KEY}
+#       CENTRAL_API_BASE_URL: ${CENTRAL_API_BASE_URL}
+#     depends_on:
+#       - division-db
+
+# volumes:
+#   division-supabase-data:
+
+
+
+
+
+# services:
+#   supabase:
+#     image: supabase/postgres:15.6.1.101
+#     container_name: supabase-db
+#     restart: unless-stopped
+#     environment:
+#       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+#       POSTGRES_DB: postgres
+#       POSTGRES_USER: postgres
+#     ports:
+#       - '54322:5432'  # Exposes PostgreSQL
+#     volumes:
+#       - supabase-data:/var/lib/postgresql/data
+#       - ./schema.sql:/docker-entrypoint-initdb.d/schema.sql
+# volumes:
+#   supabase-data:
+
+
+

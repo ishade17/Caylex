@@ -1,0 +1,31 @@
+services:
+
+  central-api:
+    build: ./central_api  # Path to your Flask API app
+    container_name: central-api-server
+    restart: unless-stopped
+    ports:
+      - '8000:8000'  # Exposes the API server on port 8000
+    environment:
+      SUPABASE_URL: ${SUPABASE_URL} #'postgresql://postgres:${POSTGRES_PASSWORD}@central-db:5432/postgres'
+      SUPABASE_KEY: '${SUPABASE_KEY}'  # If required
+      CENTRAL_API_BASE_URL: 'http://localhost:8000'  # For internal use
+    # depends_on:
+      # - central-db
+
+#   central-db:
+#     image: supabase/postgres:15.6.1.101
+#     container_name: central-supabase-db
+#     restart: unless-stopped
+#     environment:
+#       # POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+#       POSTGRES_DB: postgres
+#       POSTGRES_USER: postgres
+#     ports:
+#       - '54321:5432'  # Exposes PostgreSQL on port 54321
+#     volumes:
+#       - central-supabase-data:/var/lib/postgresql/data
+#       - ./central_schema.sql:/docker-entrypoint-initdb.d/central_schema.sql
+
+# volumes:
+#   central-supabase-data:
