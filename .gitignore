@@ -6,6 +6,7 @@ caylex_env/
 env/
 venv/
 *.env
+*.env2
 *.log
 *.pid
 
