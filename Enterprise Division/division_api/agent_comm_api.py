@@ -1,12 +1,15 @@
 import hashlib
+import requests
 
 from flask import Flask, request, jsonify 
 from concurrent.futures import ThreadPoolExecutor
 
 from agent_comm_dist import process_message
-from global_vars import supabase
+from global_vars import supabase, DIVISION_TAG, is_2xx_status_code, CENTRAL_API_BASE_URL, CENTRAL_API_KEY
+from connection_request_management import add_connection_to_local_database
 from send_message import auto_send_message
 from present_message_with_context import present_message_with_context
+from database_interaction import add_connection, create_api_key, get_division_id_from_tag
 
 
 ### RECEIVE MESSAGES ###
@@ -63,7 +66,35 @@ def receive_message():
     except Exception as e:
         app.logger.error(f"Error receiving message: {e}")
         return jsonify({"error": "Internal Server Error"}), 500
+    
 
+### RECEIVE CONNECTION REQUESTS ###
+
+@app.route('/connection/request/accept', methods=['POST'])
+def accept_connection_request():
+    data = request.get_json()
+    sender_division_id = data.get('sender_division_id')
+    # TODO: figure out how to wait for user to accept connection
+    connection_request_response = True
+    if connection_request_response:
+        raw_api_key, hashed_api_key = create_api_key()
+        return jsonify({'response': 'success', 'raw_api_key': raw_api_key, 'hashed_api_key': hashed_api_key}), 200
+    else:
+        return jsonify({'response': 'error', 'message': 'Missing sender_division_id'}), 400
+    
+@app.route('/connection/request/insert', methods=['POST'])
+def insert_connection_request():
+    data = request.get_json()
+    sender_division_id = data.get('sender_division_id')
+    current_division_id = data.get('current_division_id')
+    raw_api_key = data.get('raw_api_key')
+    central_connection_id = data.get('central_connection_id')
+
+    result = add_connection_to_local_database(sender_division_id, current_division_id, raw_api_key, central_connection_id)
+    if result:
+        return jsonify({'local_connection_id': result}), 200
+    else:
+        return jsonify({'response': 'error', 'message': 'Failed to insert connection request'}), 500
 
 ### SEND AND PRESENT MESSAGES ###
 

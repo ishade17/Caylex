@@ -23,7 +23,6 @@ headers = {
 
 def register_company(name):
     data = {"name": name}
-    # TODO: figure out if we need only the apikey header or the authorization or both
     response = requests.post(f"{CENTRAL_API_BASE_URL}/companies", json=data, headers=headers)
     if is_2xx_status_code(response.status_code):
         result = response.json()
@@ -44,11 +43,12 @@ def register_division(company_id, name, tag):
 
 # TODO: need to figure out how to share the new created api key with the other division
 # TODO: there really should be a send connection request endpoint (maybe that's when we create/share the key?)
-def add_connection(source_division_id, target_division_id, daily_messages_count=0):
-    # Generate API key and store hash
+def create_api_key():
     raw_api_key = secrets.token_hex(32)
     hashed_api_key = hashlib.sha256(raw_api_key.encode()).hexdigest()
-    
+    return raw_api_key, hashed_api_key
+
+def add_connection(source_division_id, target_division_id, hashed_api_key, daily_messages_count=0):
     data = {
         "source_division_id": source_division_id,
         "target_division_id": target_division_id,
@@ -58,9 +58,7 @@ def add_connection(source_division_id, target_division_id, daily_messages_count=
     response = requests.post(f"{CENTRAL_API_BASE_URL}/connections", json=data, headers=headers)
     if is_2xx_status_code(response.status_code):
         result = response.json()
-        # Securely send raw_api_key to the source division
-        # For demonstration, return it
-        return result['id'], raw_api_key
+        return result['id']
     else:
         logger.error(f"Error adding connection: {response.status_code} - {response.text}")
         return None, None
@@ -114,7 +112,15 @@ def get_division_api_url(division_id):
         error_message = response.json().get('error', 'Unknown error')
         logger.error(f"Error getting division API URL: {response.status_code} - {error_message}")
         return None
-
+    
+def get_division_id_from_tag(division_tag):
+    response = requests.get(f"{CENTRAL_API_BASE_URL}/divisions/tag/{division_tag}", headers=headers)
+    if is_2xx_status_code(response.status_code):
+        data = response.json()
+        return data.get('id')
+    else:
+        logger.error(f"Error getting division ID: {response.status_code} - {response.text}")
+        return None
 
 ### Main Function for CLI Interface ###
 

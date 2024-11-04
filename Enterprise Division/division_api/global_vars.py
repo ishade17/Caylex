@@ -52,7 +52,8 @@ embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
 
 genai.configure(api_key=os.getenv("GOOGLE_KEY"))
 
-company_name = os.getenv('COMPANY_NAME')
+COMPANY_NAME = os.getenv('COMPANY_NAME')
+DIVISION_TAG = os.getenv('DIVISION_TAG')
 
 ### API URLS ###
 
