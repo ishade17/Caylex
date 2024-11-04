@@ -8,7 +8,7 @@ services:
       - '8001:8000'  # Exposes the API server on port 8001
     environment:
       # Supabase configuration
-      SUPABASE_URL: 'http://kong:8000'  # Supabase API endpoint within Docker network
+      SUPABASE_URL: ${SUPABASE_URL}
       SUPABASE_KEY: ${SERVICE_ROLE_KEY}
 
       # Your environment variables
@@ -16,42 +16,17 @@ services:
       CENTRAL_API_KEY: ${CENTRAL_API_KEY}
       OPENAI_KEY: ${OPENAI_KEY}
       GOOGLE_KEY: ${GOOGLE_KEY}
-      AGENT_COMM_API_URL: ${AGENT_COMM_API_URL}
-      CUSTOMER_AGENT_URL: ${CUSTOMER_AGENT_URL}
+      AGENT_COMM_API_BASE_URL: ${AGENT_COMM_API_BASE_URL}
+      CUSTOMER_AGENT_BASE_URL: ${CUSTOMER_AGENT_BASE_URL}
+      COMPANY_NAME: ${COMPANY_NAME}
 
     depends_on:
       - kong  # Supabase's API gateway
+
     # networks:
     #   - api_internal
 
   db:
-    # image: supabase/postgres:15.1.1.78
-    # container_name: supabase-db
-    # healthcheck:
-    #   test: pg_isready -U postgres -h localhost
-    #   interval: 5s
-    #   timeout: 5s
-    #   retries: 10
-    # depends_on:
-    #   vector:
-    #     condition: service_healthy
-    # command:
-    #   - postgres
-    #   - -c
-    #   - config_file=/etc/postgresql/postgresql.conf
-    #   - -c
-    #   - log_min_messages=fatal  # Prevents Realtime polling queries from appearing in logs
-    # restart: unless-stopped
-    # environment:
-    #   POSTGRES_HOST: /var/run/postgresql
-    #   PGPORT: ${POSTGRES_PORT}
-    #   POSTGRES_PORT: ${POSTGRES_PORT}
-    #   PGPASSWORD: ${POSTGRES_PASSWORD}
-    #   POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    #   PGDATABASE: ${POSTGRES_DB}
-    #   POSTGRES_DB: ${POSTGRES_DB}
-    #   JWT_SECRET: ${JWT_SECRET}
-    #   JWT_EXP: ${JWT_EXPIRY}
     volumes:
       - ./volumes/db/realtime.sql:/docker-entrypoint-initdb.d/migrations/99-realtime.sql:Z
       - ./volumes/db/webhooks.sql:/docker-entrypoint-initdb.d/init-scripts/98-webhooks.sql:Z
@@ -68,9 +43,43 @@ services:
     # networks:
     #   - api_internal
 
+  # kong:
+  #   networks:
+  #     - api_internal
+
 # networks:
 #   api_internal:
 #     name: api_internal
 
 volumes:
   db-config:
+
+
+# PREVIOUSLY UNDER db:
+# image: supabase/postgres:15.1.1.78
+# container_name: supabase-db
+# healthcheck:
+#   test: pg_isready -U postgres -h localhost
+#   interval: 5s
+#   timeout: 5s
+#   retries: 10
+# depends_on:
+#   vector:
+#     condition: service_healthy
+# command:
+#   - postgres
+#   - -c
+#   - config_file=/etc/postgresql/postgresql.conf
+#   - -c
+#   - log_min_messages=fatal  # Prevents Realtime polling queries from appearing in logs
+# restart: unless-stopped
+# environment:
+#   POSTGRES_HOST: /var/run/postgresql
+#   PGPORT: ${POSTGRES_PORT}
+#   POSTGRES_PORT: ${POSTGRES_PORT}
+#   PGPASSWORD: ${POSTGRES_PASSWORD}
+#   POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+#   PGDATABASE: ${POSTGRES_DB}
+#   POSTGRES_DB: ${POSTGRES_DB}
+#   JWT_SECRET: ${JWT_SECRET}
+#   JWT_EXP: ${JWT_EXPIRY}

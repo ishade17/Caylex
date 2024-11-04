@@ -20,7 +20,7 @@ COPY . .
 EXPOSE 8000
 
 # Run the application using Gunicorn
-CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:8000", "app:app"]
+CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:8000", "agent_comm_api:app"]
 
 
 

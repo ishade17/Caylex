@@ -11,17 +11,33 @@ from dotenv import load_dotenv
 
 ### GLOBAL VARIABLES ###
 
-parent_directory = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+# parent_directory = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
 # Load the .env file from the parent directory
-dotenv_path = os.path.join(parent_directory, ".env")
-load_dotenv(dotenv_path)
+# dotenv_path = os.path.join(parent_directory, ".env")
+# load_dotenv(dotenv_path)
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
+
+# Load environment variables from .env file
+load_dotenv()
+
+# Print all environment variables
+for key, value in os.environ.items():
+    print(f"{key}: {value}")
+    logger.debug(f"{key}: {value}")
+
 
 # Connect to Supabase
 supabase_url = os.getenv('SUPABASE_URL')
-supabase_key = os.getenv('SERVICE_ROLE_KEY')
-if not supabase_url or not supabase_key:
-    raise EnvironmentError("SUPABASE_URL and SUPABASE_KEY must be set in environment variables.")
+supabase_key = os.getenv('SUPABASE_KEY')
+
+if not supabase_url:
+    raise EnvironmentError("SUPABASE_URL must be set in environment variables.")
+if not supabase_key:
+    raise EnvironmentError("SUPABASE_KEY/SERVICE_ROLE_KEY must be set in environment variables.")
+
 
 supabase: Client = create_client(supabase_url, supabase_key)
 
@@ -37,10 +53,6 @@ embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
 genai.configure(api_key=os.getenv("GOOGLE_KEY"))
 
 company_name = os.getenv('COMPANY_NAME')
-
-logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
-
 
 ### API URLS ###
 
