@@ -9,7 +9,7 @@ from global_vars import supabase, DIVISION_TAG, is_2xx_status_code, CENTRAL_API_
 from connection_request_management import add_connection_to_local_database
 from send_message import auto_send_message
 from present_message_with_context import present_message_with_context
-from database_interaction import add_connection, create_api_key, get_division_id_from_tag
+from database_interaction import create_api_key
 
 
 ### RECEIVE MESSAGES ###
@@ -74,7 +74,7 @@ def receive_message():
 def accept_connection_request():
     data = request.get_json()
     sender_division_id = data.get('sender_division_id')
-    # TODO: figure out how to wait for user to accept connection
+    # TODO: figure out how to wait for user to accept connection (this will eventually come from a UI interaction)
     connection_request_response = True
     if connection_request_response:
         raw_api_key, hashed_api_key = create_api_key()

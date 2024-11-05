@@ -1,3 +1,4 @@
+import argparse
 import requests
 from flask import request, jsonify 
 
@@ -50,3 +51,27 @@ def send_connection_request(target_division_tag):
             return jsonify({'response': 'error', 'message': 'Failed to insert connection request'}), 500
     else:
         return jsonify({'response': 'error', 'message': 'Failed to accept connection request'}), 500
+
+
+### CLI Main Function ###
+
+def main():
+    parser = argparse.ArgumentParser(description="CLI for managing connection requests.")
+    subparsers = parser.add_subparsers(dest="command")
+
+    # Command to send a connection request
+    parser_send_request = subparsers.add_parser("send_request", help="Send a connection request to another division")
+    parser_send_request.add_argument("target_division_tag", help="Tag of the target division for the connection request")
+
+    args = parser.parse_args()
+
+    # Execute based on CLI command
+    if args.command == "send_request":
+        result = send_connection_request(args.target_division_tag)
+        if result.get('response') == 'success':
+            print(f"Connection request successful. Local connection ID: {result['local_connection_id']}")
+        else:
+            print(f"Error: {result.get('message', 'Unknown error occurred')}")
+
+if __name__ == "__main__":
+    main()
