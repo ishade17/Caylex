@@ -23,6 +23,8 @@ services:
     depends_on:
       - kong  # Supabase's API gateway
 
+    # networks:
+    #   - api_internal
 
   db:
     volumes:
@@ -38,6 +40,16 @@ services:
 
       - ../../division_schema.sql:/docker-entrypoint-initdb.d/init-scripts/999-division_schema.sql:Z
 
+    # networks:
+    #   - api_internal
+
+  # kong:
+  #   networks:
+  #     - api_internal
+
+# networks:
+#   api_internal:
+#     name: api_internal
 
 volumes:
   db-config:
