@@ -4,7 +4,7 @@ CREATE EXTENSION IF NOT EXISTS vector;
 -- Creates a table for connections
 CREATE TABLE IF NOT EXISTS connections (
     local_connection_id SERIAL PRIMARY KEY,
-    central_connection_id INT,  -- Added field to map to central database
+    central_connection_id INT UNIQUE,  -- Added field to map to central database
     source_division_id UUID NOT NULL,
     target_division_id UUID NOT NULL,
     daily_messages_count INT,
@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS messages (
     thread_id INT,
     thread_msg_ordering INT,
     token_counts JSONB,
-    FOREIGN KEY (connection_id) REFERENCES connections(local_connection_id)
+    FOREIGN KEY (connection_id) REFERENCES connections(central_connection_id)
 );
 
 -- Creates a table for custom data policies
@@ -68,6 +68,8 @@ CREATE INDEX IF NOT EXISTS data_policy_docs_embedding_idx
     WITH (lists = 100);
 
 -- Create a single collab_threads table
+-- This is currently unused
+-- It probably makes sense to only keep the central collab_threads table because it has cost data on both the source and target division
 CREATE TABLE IF NOT EXISTS collab_threads (
     thread_id SERIAL PRIMARY KEY,
     connection_id INT,

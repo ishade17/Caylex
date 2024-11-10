@@ -33,36 +33,34 @@ def receive_message():
         message_entry = data.get('message_entry')
         if not message_entry:
             return jsonify({"error": "Invalid data"}), 400
+        
+        required_fields = ['connection_id', 'sender_division_id', 'receiver_division_id', 'message_content', 
+                           'timestamp', 'status', 'thread_id', 'thread_msg_ordering', 'token_counts']
+        for field in required_fields:
+            if field not in message_entry:
+                return jsonify({"error": f"'{field}' is required"}), 400
+            
+        # We use the central connection id for connection_id because it is standardized across the connected divisions.
+        # This is different from other local data tables where we use the local connection id.
         connection_id = message_entry.get('connection_id')
-        if not connection_id:
-            return jsonify({"error": "Missing 'connection_id' in message entry"}), 400
         
         # Validate API Key against the specific connection
-        # TODO: i think this was where the bug was from, but we need to figure out the local vs central connection id issue first.
-        # i actually think we should pass in the central_connection_id because it is standardized across the connected divisions.
         result = supabase.table("connections") \
             .select("*") \
-            .eq("central_connection_id", connection_id) \
+            .eq("connection_id", connection_id) \
             .eq("raw_api_key", raw_api_key) \
             .execute()
         
         if not result.data:
             return jsonify({"error": "Invalid API Key for the specified connection"}), 403
-        
-        # changed recently -- need to retry
-        required_fields = ['central_connection_id', 'sender_division_id', 'receiver_division_id', 'message_content', 
-                           'timestamp', 'status', 'thread_id', 'thread_msg_ordering', 'token_counts']
-        for field in required_fields:
-            if field not in message_entry:
-                return jsonify({"error": f"'{field}' is required"}), 400
 
         # Insert message into Supabase
         message_entry['status'] = 'received'
         result = supabase.table("messages").insert(message_entry).execute()
 
         # Process message asynchronously with context
-        # TODO: process_message() calls auto_send_message(), which calls the receive_message() endpoint.
-        # i guess this is okay because this is the messsaging loop, but we cant have this for testing.
+        # process_message() calls auto_send_message(), which calls the receive_message() endpoint.
+        # this is okay because this is the messsaging loop, but we cant have this for testing.
         executor.submit(process_message, message_entry)
 
         return jsonify({"message_id": result.data[0]['message_id']}), 200

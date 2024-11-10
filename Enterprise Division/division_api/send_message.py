@@ -46,7 +46,7 @@ def check_policy_compliance(message, policy, from_doc=False, print_statements=Fa
         logger.error(f"Error occurred while checking policy compliance: {e}")
         return False, str(e)
 
-def log_message(sender_division_id, receiver_division_id, connection, local_connection_id, raw_api_key, message, thread_id="new thread", print_statements=False):
+def log_message(sender_division_id, receiver_division_id, connection, raw_api_key, message, thread_id="new thread", print_statements=False):
     # Calculate token counts
     token_counts = {}
     for provider, default_model in default_models.items():
@@ -97,9 +97,10 @@ def log_message(sender_division_id, receiver_division_id, connection, local_conn
             logger.error("Error accessing thread in central database.")
             return None, None, None, None
         
-    # since we are inserting into the local database, we use the local_connection_id
+    # usually when we are inserting into the local database, we use the local_connection_id
+    # but since message entry needs to be synced across divisions, we use the central connection id
     message_entry = {
-        "connection_id": local_connection_id,
+        "connection_id": connection['id'],
         "sender_division_id": sender_division_id,
         "receiver_division_id": receiver_division_id,
         "message_content": message,
@@ -122,7 +123,7 @@ def log_message(sender_division_id, receiver_division_id, connection, local_conn
         return None, None, None, None
 
     # Retrieve the API key for the connection (assuming it's available)
-    # api_key = connection['api_key']
+    # using the raw_api_key instead of connection['api_key'] because message_entry is inserted into the local databases.
     if not raw_api_key:
         logger.error("No API Key found for the connection.")
         return None, None, None, None
@@ -202,7 +203,7 @@ def send_message(sender_division_id, receiver_division_id, message, thread_id="n
     # TODO: we could just pass in the local_connection_id instead of the connection object?
     # we need to pass in both.
     sender_message_id, receiver_message_id, thread_id, thread_msg_ordering = log_message(
-        sender_division_id, receiver_division_id, connection, local_connection_id, raw_api_key, message, thread_id
+        sender_division_id, receiver_division_id, connection, raw_api_key, message, thread_id
     )
 
     if print_statements:
