@@ -10,6 +10,8 @@ COPY requirements.txt ./
 # Install any needed packages specified in requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
+RUN apt update && apt install -y curl
+
 # Install Gunicorn
 # RUN pip install gunicorn
 

@@ -70,11 +70,12 @@ CREATE INDEX IF NOT EXISTS data_policy_docs_embedding_idx
 -- Create a single collab_threads table
 CREATE TABLE IF NOT EXISTS collab_threads (
     thread_id SERIAL PRIMARY KEY,
-    connection_id INT REFERENCES connections(local_connection_id),
+    connection_id INT,
     messages_count INT,
     last_message_timestamp TIMESTAMP,
     source_division_cost NUMERIC,
-    target_division_cost NUMERIC
+    target_division_cost NUMERIC,
+    FOREIGN KEY (connection_id) REFERENCES connections(local_connection_id)
 );
 
 -- Create the updated function with the new return type

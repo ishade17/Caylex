@@ -1,9 +1,10 @@
 import requests
 import re
+import hashlib
 
 from datetime import datetime
 
-from global_vars import logger, supabase, openai_client, CENTRAL_API_BASE_URL, is_2xx_status_code
+from global_vars import logger, supabase, openai_client, CENTRAL_API_BASE_URL, is_2xx_status_code, COMPANY_NAME
 from count_message_tokens import default_models, tokenizers
 from data_policy_rag import retrieve_relevant_document_chunks
 from database_interaction import find_connection, get_division_api_url
@@ -45,7 +46,7 @@ def check_policy_compliance(message, policy, from_doc=False, print_statements=Fa
         logger.error(f"Error occurred while checking policy compliance: {e}")
         return False, str(e)
 
-def log_message(sender_division_id, receiver_division_id, connection, message, thread_id="new thread", print_statements=False):
+def log_message(sender_division_id, receiver_division_id, connection, local_connection_id, raw_api_key, message, thread_id="new thread", print_statements=False):
     # Calculate token counts
     token_counts = {}
     for provider, default_model in default_models.items():
@@ -56,6 +57,7 @@ def log_message(sender_division_id, receiver_division_id, connection, message, t
 
     if thread_id == "new thread":
         # Create a new thread in the central database via API call
+        # since we are inserting into the central database, we use the central_connection_id (i.e., connection['id'])
         thread_entry = {
             "connection_id": connection['id'],
             "last_message_timestamp": datetime.now().isoformat(),
@@ -94,9 +96,10 @@ def log_message(sender_division_id, receiver_division_id, connection, message, t
         else:
             logger.error("Error accessing thread in central database.")
             return None, None, None, None
-
+        
+    # since we are inserting into the local database, we use the local_connection_id
     message_entry = {
-        "connection_id": connection['id'],
+        "connection_id": local_connection_id,
         "sender_division_id": sender_division_id,
         "receiver_division_id": receiver_division_id,
         "message_content": message,
@@ -119,8 +122,8 @@ def log_message(sender_division_id, receiver_division_id, connection, message, t
         return None, None, None, None
 
     # Retrieve the API key for the connection (assuming it's available)
-    api_key = connection['api_key']
-    if not api_key:
+    # api_key = connection['api_key']
+    if not raw_api_key:
         logger.error("No API Key found for the connection.")
         return None, None, None, None
     
@@ -130,7 +133,7 @@ def log_message(sender_division_id, receiver_division_id, connection, message, t
     }
 
     headers = {
-        "X-API-KEY": api_key
+        "X-API-KEY": raw_api_key
     }
 
     response = requests.post(f"{receiver_api_url}/messages/receive", json=data_to_send, headers=headers)
@@ -143,16 +146,35 @@ def log_message(sender_division_id, receiver_division_id, connection, message, t
 
     return sender_result.data[0]['message_id'], receiver_message_id, thread_id, thread_msg_ordering
 
+def get_raw_hashed_api_keys(sender_division_id, receiver_division_id):
+    filter_string = (
+        f"and(source_division_id.eq.{sender_division_id},target_division_id.eq.{receiver_division_id}),"
+        f"and(source_division_id.eq.{receiver_division_id},target_division_id.eq.{sender_division_id})"
+    )
+    # Query connections where the two divisions are connected, regardless of order
+    result = supabase.table("connections").select("raw_api_key").or_(filter_string).execute()
+    raw_api_key = result.data[0]['raw_api_key']
+    hashed_api_key = hashlib.sha256(raw_api_key.encode()).hexdigest()
+    return raw_api_key, hashed_api_key
+
 def send_message(sender_division_id, receiver_division_id, message, thread_id="new thread", print_statements=False):
     # Find connection via API call
-    connection = find_connection(sender_division_id, receiver_division_id)
+    raw_api_key, hashed_api_key = get_raw_hashed_api_keys(sender_division_id, receiver_division_id)
+
+    # TODO: big problem here. we are retuning the central_connection_id, but all the data tables reference the local_connection_id.
+    # update: done.
+    connection, approved_to_send_message, local_connection_id = find_connection(sender_division_id, receiver_division_id, hashed_api_key)
+
     if not connection:
         print("No valid connection found.")
         raise Exception("No valid connection found for this proposed message.")
         # return False, None, None, None, None, None
+    if not approved_to_send_message:
+        print("Message not approved to be sent.")
+        raise Exception("Message not approved to be sent.")
 
     # Retrieve data policies from local database
-    policies = supabase.table("custom_data_policies").select("*").eq("connection_id", connection['id']).execute()
+    policies = supabase.table("custom_data_policies").select("*").eq("connection_id", local_connection_id).execute()
 
     # Policy compliance checks
     if policies.data:
@@ -165,7 +187,8 @@ def send_message(sender_division_id, receiver_division_id, message, thread_id="n
         print("No data policies found for this connection. Proceeding with message sending.")
 
     # Retrieve relevant document chunks
-    relevant_chunks = retrieve_relevant_document_chunks(message, connection, top_k=2)
+    # TODO: we could just pass in the local_connection_id instead of the connection object? done.
+    relevant_chunks = retrieve_relevant_document_chunks(message, local_connection_id, top_k=2)
     if relevant_chunks:
         for chunk in relevant_chunks:
             compliant_bool, compliance_response = check_policy_compliance(message, chunk['content'], from_doc=True)
@@ -176,8 +199,10 @@ def send_message(sender_division_id, receiver_division_id, message, thread_id="n
         print("No relevant document chunks found. Proceeding with message sending.")
 
     # Log message
+    # TODO: we could just pass in the local_connection_id instead of the connection object?
+    # we need to pass in both.
     sender_message_id, receiver_message_id, thread_id, thread_msg_ordering = log_message(
-        sender_division_id, receiver_division_id, connection, message, thread_id
+        sender_division_id, receiver_division_id, connection, local_connection_id, raw_api_key, message, thread_id
     )
 
     if print_statements:
@@ -242,13 +267,14 @@ def auto_send_message(sender_division_id, message, print_statements=False):
 
         # Get sender company name
         # TODO: we may just want to pass in sender_company_name to the function like we were doing before?
-        sender_response_company = requests.get(f"{CENTRAL_API_BASE_URL}/companies/{sender_company_id}")
-        if is_2xx_status_code(sender_response_company.status_code):
-            sender_company_info = sender_response_company.json()
-            sender_company_name = sender_company_info['name']
-        else:
-            logger.error("Error retrieving sender company information.")
-            return None
+        # TODO: we already have COMPANY_NAME as an env variable, so i think this api call is unnecessary
+        # sender_response_company = requests.get(f"{CENTRAL_API_BASE_URL}/companies/{sender_company_id}")
+        # if is_2xx_status_code(sender_response_company.status_code):
+        #     sender_company_info = sender_response_company.json()
+        #     sender_company_name = sender_company_info['name']
+        # else:
+        #     logger.error("Error retrieving sender company information.")
+        #     return None
     else:
         logger.error("Error retrieving sender division information.")
         return None
@@ -257,7 +283,7 @@ def auto_send_message(sender_division_id, message, print_statements=False):
     clean_message = re.sub(r"@[\w_]+", "", message).strip()
 
     if print_statements:
-        print(f"Sender Company: {sender_company_name} (Division ID: {sender_division_id}, Tag: {sender_division_tag})")
+        print(f"Sender Company: {COMPANY_NAME} (Division ID: {sender_division_id}, Tag: {sender_division_tag})")
         print(f"Receiver Company: {receiver_company_name} (Division ID: {receiver_division_id}, Tag: {receiver_division_tag})")
         print(f"Thread ID: {thread_id if thread_id else 'new thread'}")
         print(f"Message: {clean_message}")
@@ -274,7 +300,7 @@ def auto_send_message(sender_division_id, message, print_statements=False):
         return None
 
     message_info = {
-        "sender_company_name": sender_company_name,
+        "sender_company_name": COMPANY_NAME,
         "receiver_company_name": receiver_company_name,
         "sender_division_id": sender_division_id,
         "receiver_division_id": receiver_division_id,

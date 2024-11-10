@@ -262,8 +262,8 @@ def get_company_by_id(company_id):
         app.logger.error(f"Error fetching company by ID: {e}")
         return jsonify({"error": "Internal Server Error"}), 500
 
-# POST /connections
-@app.route('/connections', methods=['POST'])
+# POST /connections/insert
+@app.route('/connections/insert', methods=['POST'])
 @require_api_key
 def insert_connection():
     """

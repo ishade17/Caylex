@@ -4,6 +4,9 @@ from global_vars import logger, CUSTOMER_AGENT_BASE_URL, AGENT_COMM_API_BASE_URL
 
 # Get information about the model used before producing the message context
 def get_ai_agent_info():
+    # TODO: where is this endpoint defined?
+    # Oh right, it's in the customer_agent_api.py lol
+    # so does this mean we need to have a docker container running for the customer_agent_api? ugh
     model_info_response = requests.get(f"{CUSTOMER_AGENT_BASE_URL}/ai_agent_info")
     if is_2xx_status_code(model_info_response.status_code):
         model_provider = model_info_response.json().get("model_provider")
@@ -15,6 +18,7 @@ def get_ai_agent_info():
 
 # Call the present_message_with_context endpoint to get context
 def call_present_message_with_context_endpoint(message_info, model_provider, model_name):
+    # TODO: do we need to call our own endpoint or can we just call the function directly?
     msg_context_response = requests.post(
         f"{AGENT_COMM_API_BASE_URL}/message/present_with_context",
         json={"message_info": message_info, "model_provider": model_provider, "model_name": model_name}
@@ -43,6 +47,7 @@ def call_auto_send_message_endpoint(sender_division_id, message):
         "message": message
     }
     # Call your own endpoint to send the message
+    # TODO: do we need to call our own endpoint or can we just call the function directly?
     response = requests.post(f"{AGENT_COMM_API_BASE_URL}/message/auto_send", json=data)
     if not is_2xx_status_code(response.status_code):
         logger.error("Error: failed to auto send message.")
