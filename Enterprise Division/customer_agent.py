@@ -4,8 +4,13 @@ from flask import Flask, request, jsonify
 
 from openai import OpenAI
 import google.generativeai as genai
+from dotenv import load_dotenv 
+
 
 app = Flask(__name__)
+
+# Load environment variables from .env file
+load_dotenv()
 
 # theoretically, these will be the customer's api keys
 # we don't need the parent directory because the .env file is in the same folder right now

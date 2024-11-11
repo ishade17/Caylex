@@ -5,7 +5,7 @@ services:
     container_name: division-api-server
     restart: unless-stopped
     ports:
-      - '8001:8000'  # Exposes the API server on port 8001
+      - '8002:8000'  # Exposes the API server on port 8000
     environment:
       # Supabase configuration
       SUPABASE_URL: ${SUPABASE_URL}

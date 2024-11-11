@@ -5,11 +5,11 @@ services:
     container_name: central-api-server
     restart: unless-stopped
     ports:
-      - '8000:8000'  # Exposes the API server on port 8000
+      - '8001:8001'  # Exposes the API server on port 8000
     environment:
       SUPABASE_URL: ${SUPABASE_URL} #'postgresql://postgres:${POSTGRES_PASSWORD}@central-db:5432/postgres'
       SUPABASE_KEY: '${SUPABASE_KEY}'  # If required
-      CENTRAL_API_BASE_URL: 'http://localhost:8000'  # For internal use
+      CENTRAL_API_BASE_URL: 'http://localhost:8001'  # For internal use
     # depends_on:
       # - central-db
 

@@ -1,12 +1,13 @@
 import requests
 
 from global_vars import logger, CUSTOMER_AGENT_BASE_URL, AGENT_COMM_API_BASE_URL, is_2xx_status_code
+from send_message import auto_send_message
+from present_message_with_context import present_message_with_context
 
 # Get information about the model used before producing the message context
 def get_ai_agent_info():
-    # TODO: where is this endpoint defined?
-    # Oh right, it's in the customer_agent_api.py lol
-    # so does this mean we need to have a docker container running for the customer_agent_api? ugh
+    # This endpoint defined in the customer_agent_api.py
+    # Does this mean we need to have a docker container running for the customer_agent_api? ugh
     model_info_response = requests.get(f"{CUSTOMER_AGENT_BASE_URL}/ai_agent_info")
     if is_2xx_status_code(model_info_response.status_code):
         model_provider = model_info_response.json().get("model_provider")
@@ -19,16 +20,23 @@ def get_ai_agent_info():
 # Call the present_message_with_context endpoint to get context
 def call_present_message_with_context_endpoint(message_info, model_provider, model_name):
     # TODO: do we need to call our own endpoint or can we just call the function directly?
-    msg_context_response = requests.post(
-        f"{AGENT_COMM_API_BASE_URL}/message/present_with_context",
-        json={"message_info": message_info, "model_provider": model_provider, "model_name": model_name}
-    )
-    if is_2xx_status_code(msg_context_response):
-        msg_context = msg_context_response.json().get("context")
-        return msg_context
-    else:
-        logger.error("Error: did not successsfully fetch message context.")
-        raise Exception("Error: did not successsfully fetch message context.")
+    # TODO: this post request is not working currently, and it is recommended to use the function directly
+    # msg_context_response = requests.post(
+    #     f"{AGENT_COMM_API_BASE_URL}/message/present_with_context",
+    #     json={"message_info": message_info, "model_provider": model_provider, "model_name": model_name}
+    # )
+    # if is_2xx_status_code(msg_context_response):
+    #     msg_context = msg_context_response.json().get("context")
+    #     return msg_context
+    # else:
+    #     logger.error("Error: did not successsfully fetch message context.")
+    #     raise Exception("Error: did not successsfully fetch message context.")
+    
+    msg_context = present_message_with_context(message_info, model_provider, model_name)
+    if not msg_context:
+        logger.error("Error: failed to get message context.")
+        raise Exception("Error: failed to get message context.")
+    return msg_context
     
 # Function to call customer’s AI agent with context
 def call_customer_ai_agent(prompt):
@@ -48,15 +56,32 @@ def call_auto_send_message_endpoint(sender_division_id, message):
     }
     # Call your own endpoint to send the message
     # TODO: do we need to call our own endpoint or can we just call the function directly?
-    response = requests.post(f"{AGENT_COMM_API_BASE_URL}/message/auto_send", json=data)
-    if not is_2xx_status_code(response.status_code):
+    # response = requests.post(f"{AGENT_COMM_API_BASE_URL}/message/auto_send", json=data)
+    # if not is_2xx_status_code(response.status_code):
+    #     logger.error("Error: failed to auto send message.")
+    #     raise Exception("Error: failed to auto send message.")
+
+    message_info = auto_send_message(sender_division_id, message)
+    if not message_info:
         logger.error("Error: failed to auto send message.")
         raise Exception("Error: failed to auto send message.")
+    return message_info
 
 # Message processing function (background task) called from receive_message()
 def process_message(message_info):
     try:
         model_provider, model_name = get_ai_agent_info()
+
+        if not model_provider or not model_name:
+            logger.error("Error: no model provider or model name found.")
+            # For testing purposes...
+            # This should be coming from the customer_agent api container
+            agent_info = {
+                "model_provider" : "openai",
+                "model_name" : "GPT-4 Turbo"
+            }
+            model_provider = agent_info["model_provider"]
+            model_name = agent_info["model_name"]
 
         msg_context = call_present_message_with_context_endpoint(message_info, model_provider, model_name)
 
@@ -64,7 +89,7 @@ def process_message(message_info):
         agent_response = call_customer_ai_agent(msg_context)
 
         # Automatically send the AI's response to the conversation thread
-        call_auto_send_message_endpoint(
+        message_info = call_auto_send_message_endpoint(
             sender_division_id=message_info["receiver_division_id"],
             message=agent_response
         )

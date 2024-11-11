@@ -11,7 +11,11 @@ from database_interaction import find_connection, get_division_api_url
 
 ### SEND MESSAGES ###
 
-def check_policy_compliance(message, policy, from_doc=False, print_statements=False):
+def check_policy_compliance(message, 
+                            policy, 
+                            from_doc=False, 
+                            print_statements=False):
+    
     if from_doc:
         policy_text = f"Data policy excerpt: '{policy}'"
     else:
@@ -46,7 +50,19 @@ def check_policy_compliance(message, policy, from_doc=False, print_statements=Fa
         logger.error(f"Error occurred while checking policy compliance: {e}")
         return False, str(e)
 
-def log_message(sender_division_id, receiver_division_id, connection, raw_api_key, message, thread_id="new thread", print_statements=False):
+def log_message(sender_division_id,
+                receiver_division_id,
+                connection,
+                raw_api_key,
+                message,
+                sender_division_tag,
+                receiver_division_tag,
+                receiver_company_name,
+                thread_id="new thread",
+                print_statements=False):
+    
+    logger.info("Entered log_message()")
+
     # Calculate token counts
     token_counts = {}
     for provider, default_model in default_models.items():
@@ -55,6 +71,8 @@ def log_message(sender_division_id, receiver_division_id, connection, raw_api_ke
     if print_statements:
         print(f"token_counts in log_message(): {token_counts}")
 
+    # TODO: just noticed we are not writing any data to the local collab_threads data tables (i think this is okay?)
+    # but this might mean that we don't need them.
     if thread_id == "new thread":
         # Create a new thread in the central database via API call
         # since we are inserting into the central database, we use the central_connection_id (i.e., connection['id'])
@@ -102,14 +120,19 @@ def log_message(sender_division_id, receiver_division_id, connection, raw_api_ke
     message_entry = {
         "connection_id": connection['id'],
         "sender_division_id": sender_division_id,
+        "sender_division_tag": sender_division_tag,
+        "sender_company_name": COMPANY_NAME,
         "receiver_division_id": receiver_division_id,
+        "receiver_division_tag": receiver_division_tag,
+        "receiver_company_name": receiver_company_name,
         "message_content": message,
         "timestamp": datetime.now().isoformat(),
         "status": "sent",
         "thread_id": thread_id,
         "thread_msg_ordering": thread_msg_ordering,
-        "token_counts": token_counts
+        "token_counts": token_counts,
     }
+
     if print_statements:
         print(f"message_entry in log_message(): {message_entry}")
 
@@ -147,7 +170,9 @@ def log_message(sender_division_id, receiver_division_id, connection, raw_api_ke
 
     return sender_result.data[0]['message_id'], receiver_message_id, thread_id, thread_msg_ordering
 
-def get_raw_hashed_api_keys(sender_division_id, receiver_division_id):
+def get_raw_hashed_api_keys(sender_division_id, 
+                            receiver_division_id):
+    
     filter_string = (
         f"and(source_division_id.eq.{sender_division_id},target_division_id.eq.{receiver_division_id}),"
         f"and(source_division_id.eq.{receiver_division_id},target_division_id.eq.{sender_division_id})"
@@ -158,7 +183,17 @@ def get_raw_hashed_api_keys(sender_division_id, receiver_division_id):
     hashed_api_key = hashlib.sha256(raw_api_key.encode()).hexdigest()
     return raw_api_key, hashed_api_key
 
-def send_message(sender_division_id, receiver_division_id, message, thread_id="new thread", print_statements=False):
+def send_message(sender_division_id, 
+                 receiver_division_id, 
+                 message, 
+                 sender_division_tag,
+                 receiver_division_tag,
+                 receiver_company_name,
+                 thread_id="new thread", 
+                 print_statements=False):
+    
+    logger.info("Entered send_message()")
+
     # Find connection via API call
     raw_api_key, hashed_api_key = get_raw_hashed_api_keys(sender_division_id, receiver_division_id)
 
@@ -203,7 +238,15 @@ def send_message(sender_division_id, receiver_division_id, message, thread_id="n
     # TODO: we could just pass in the local_connection_id instead of the connection object?
     # we need to pass in both.
     sender_message_id, receiver_message_id, thread_id, thread_msg_ordering = log_message(
-        sender_division_id, receiver_division_id, connection, raw_api_key, message, thread_id
+        sender_division_id, 
+        receiver_division_id, 
+        connection, 
+        raw_api_key, 
+        message, 
+        sender_division_tag,
+        receiver_division_tag,
+        receiver_company_name,
+        thread_id
     )
 
     if print_statements:
@@ -211,7 +254,12 @@ def send_message(sender_division_id, receiver_division_id, message, thread_id="n
 
     return True, sender_message_id, receiver_message_id, thread_id, thread_msg_ordering, connection
 
-def auto_send_message(sender_division_id, message, print_statements=False):
+def auto_send_message(sender_division_id, 
+                      message, 
+                      print_statements=False):
+    
+    logger.info("Entered auto_send_message()")
+
     # Regex patterns to find tags
     division_tag_pattern = re.compile(r"@(?!thread_|new_thread)([a-zA-Z0-9_]+)")
     thread_tag_pattern = re.compile(r"@thread_(\d+)")
@@ -294,6 +342,9 @@ def auto_send_message(sender_division_id, message, print_statements=False):
         sender_division_id,
         receiver_division_id,
         clean_message,
+        sender_division_tag,
+        receiver_division_tag,
+        receiver_company_name,
         thread_id if thread_id else "new thread"
     )
 

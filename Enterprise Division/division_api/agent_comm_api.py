@@ -4,7 +4,7 @@ from flask import Flask, request, jsonify
 from concurrent.futures import ThreadPoolExecutor
 
 from agent_comm_dist import process_message
-from global_vars import supabase
+from global_vars import supabase, logger
 from connection_request_management import add_connection_to_local_database, create_api_key
 from send_message import auto_send_message
 from present_message_with_context import present_message_with_context
@@ -19,6 +19,7 @@ executor = ThreadPoolExecutor(max_workers=10)
 # Endpoint to receive and store messages
 @app.route('/message/receive', methods=['POST'])
 def receive_message():
+    logger.info("/message/receive endpoint hit")
     try:
         # Extract API Key from headers
         raw_api_key = request.headers.get('X-API-KEY')
@@ -34,8 +35,19 @@ def receive_message():
         if not message_entry:
             return jsonify({"error": "Invalid data"}), 400
         
-        required_fields = ['connection_id', 'sender_division_id', 'receiver_division_id', 'message_content', 
-                           'timestamp', 'status', 'thread_id', 'thread_msg_ordering', 'token_counts']
+        required_fields = ['connection_id', 
+                           'sender_division_id', 
+                           'sender_division_tag', 
+                           'sender_company_name',
+                           'receiver_division_id', 
+                           'receiver_division_tag', 
+                           'receiver_company_name',
+                           'message_content', 
+                           'timestamp', 
+                           'status', 
+                           'thread_id', 
+                           'thread_msg_ordering', 
+                           'token_counts']
         for field in required_fields:
             if field not in message_entry:
                 return jsonify({"error": f"'{field}' is required"}), 400
@@ -47,21 +59,25 @@ def receive_message():
         # Validate API Key against the specific connection
         result = supabase.table("connections") \
             .select("*") \
-            .eq("connection_id", connection_id) \
+            .eq("central_connection_id", connection_id) \
             .eq("raw_api_key", raw_api_key) \
             .execute()
         
         if not result.data:
-            return jsonify({"error": "Invalid API Key for the specified connection"}), 403
+            return jsonify({"error": "Invalid API Key for the specified central connection id"}), 403
 
         # Insert message into Supabase
         message_entry['status'] = 'received'
         result = supabase.table("messages").insert(message_entry).execute()
 
+        logger.info("Within receive_message(), about to execute process_message function")
+
         # Process message asynchronously with context
         # process_message() calls auto_send_message(), which calls the receive_message() endpoint.
         # this is okay because this is the messsaging loop, but we cant have this for testing.
         executor.submit(process_message, message_entry)
+
+        logger.info("Within receive_message(), finished with the process_message function")
 
         return jsonify({"message_id": result.data[0]['message_id']}), 200
 
@@ -77,6 +93,7 @@ def accept_connection_request():
     data = request.get_json()
     sender_division_id = data.get('sender_division_id')
     # TODO: figure out how to wait for user to accept connection (this will eventually come from a UI interaction)
+    # This logic^ will involve the sender_division_id etc.
     connection_request_response = True
     if connection_request_response:
         raw_api_key, hashed_api_key = create_api_key()
@@ -103,6 +120,7 @@ def insert_connection_request():
 
 @app.route('/message/auto_send', methods=['POST'])
 def api_auto_send_message():
+    logger.info("/message/auto_send endpoint hit")
     try:
         data = request.get_json()
         sender_division_id = data.get('sender_division_id')
@@ -128,7 +146,7 @@ def api_present_message_with_context():
     return jsonify({'context': context})
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8000)
+    app.run(host='0.0.0.0', port=8002)
 
 
 """
@@ -158,14 +176,18 @@ SELECT * FROM connections;
 ^this worked.
 
 
-docker exec division-api-server curl -X POST http://localhost:8001/message/receive \
+docker exec division-api-server curl -X POST http://division-api:8002/message/receive \
   -H "Content-Type: application/json" \
   -H "X-API-KEY: 8d625c78b565f0b3d6684c10a4660a2f8c6e88bcffc2aebebade1862dab945ff" \
   -d '{
     "message_entry": {
-      "central_connection_id": 1,
+      "connection_id": 1,
       "sender_division_id": 1,
+      "sender_division_tag": "saas_customer_success",
+      "sender_company_name": "SaaS Solutions",
       "receiver_division_id": 2,
+      "receiver_division_tag": "consulting_firm_acct",
+      "receiver_company_name": "Consulting Firm",
       "message_content": "Hello, World!",
       "timestamp": "2024-11-08T12:00:00Z",
       "status": "sent",
@@ -174,9 +196,5 @@ docker exec division-api-server curl -X POST http://localhost:8001/message/recei
       "token_counts": {}
     }
   }'
-
-TODO: i got this error
-Error response from daemon: Container 4db8311c9bdccb9fd8c57712af9ef157c1a16fa7de27226abfba3d331662725c is restarting, wait until the container is running
-How do i fix this?
 
 """
