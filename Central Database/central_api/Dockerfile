@@ -22,4 +22,5 @@ ENV FLASK_RUN_HOST=0.0.0.0
 ENV FLASK_RUN_PORT=8001
 
 # Run the application
-CMD ["flask", "run"]
+# idk if the host and port are needed here and if the log level will work lol
+CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:8001", "central_api:app", "--log-level=info"]

@@ -1,6 +1,6 @@
 import requests
 
-from global_vars import logger, CUSTOMER_AGENT_BASE_URL, AGENT_COMM_API_BASE_URL, is_2xx_status_code
+from global_vars import logger, CUSTOMER_AGENT_BASE_URL, AGENT_COMM_API_BASE_URL, is_2xx_status_code, DIVISION_TAG, CENTRAL_API_BASE_URL
 from send_message import auto_send_message
 from present_message_with_context import present_message_with_context
 
@@ -67,31 +67,44 @@ def call_auto_send_message_endpoint(sender_division_id, message):
         raise Exception("Error: failed to auto send message.")
     return message_info
 
+def start_new_thread(message):
+    sender_division_id = requests.get(f"{CENTRAL_API_BASE_URL}/divisions/tag/{DIVISION_TAG}").json()['id']
+    message_info = call_auto_send_message_endpoint(sender_division_id, message)
+    return message_info
+
 # Message processing function (background task) called from receive_message()
 def process_message(message_info):
     try:
         model_provider, model_name = get_ai_agent_info()
 
-        if not model_provider or not model_name:
-            logger.error("Error: no model provider or model name found.")
-            # For testing purposes...
-            # This should be coming from the customer_agent api container
-            agent_info = {
-                "model_provider" : "openai",
-                "model_name" : "GPT-4 Turbo"
-            }
-            model_provider = agent_info["model_provider"]
-            model_name = agent_info["model_name"]
+        # if not model_provider or not model_name:
+        #     logger.error("Error: no model provider or model name found.")
+        #     # For testing purposes...
+        #     # This should be coming from the customer_agent api container
+        #     agent_info = {
+        #         "model_provider" : "openai",
+        #         "model_name" : "GPT-4 Turbo"
+        #     }
+        #     model_provider = agent_info["model_provider"]
+        #     model_name = agent_info["model_name"]
 
         msg_context = call_present_message_with_context_endpoint(message_info, model_provider, model_name)
+        # msg_context = f"{msg_context} \n\n **If you think the original requested task is completed as exactly specified, then simply respond only with 'TASK COMPLETE'. If you have questions or need clarifications, then please follow-up. Iterate on the task until the request is completed as exactly specified.**"
 
         # Call the customer’s AI agent with the generated context
         agent_response = call_customer_ai_agent(msg_context)
 
+        # Check if the collaboration task is complete
+        # if agent_response == "TASK COMPLETE":
+        #     return agent_response
+
+        # Response to the sender division with the proper thread tag
+        message_to_send = f"@thread_{message_info['thread_id']} @{message_info['sender_division_tag']} {agent_response}"
+
         # Automatically send the AI's response to the conversation thread
         message_info = call_auto_send_message_endpoint(
             sender_division_id=message_info["receiver_division_id"],
-            message=agent_response
+            message=message_to_send
         )
     except Exception as e:
         logger.error(f"Error processing message: {e}")

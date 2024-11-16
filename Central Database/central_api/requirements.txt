@@ -52,6 +52,7 @@ gotrue==2.8.1
 grpc-google-iam-v1==0.13.1
 grpcio==1.66.1
 grpcio-status==1.66.1
+gunicorn==23.0.0
 h11==0.14.0
 h2==4.1.0
 hpack==4.0.0

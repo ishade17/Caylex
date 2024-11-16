@@ -1,6 +1,11 @@
 import requests
 
-from global_vars import supabase, logger, CENTRAL_API_BASE_URL, is_2xx_status_code
+from global_vars import supabase, logger, CENTRAL_API_BASE_URL, is_2xx_status_code, CENTRAL_API_KEY
+
+central_headers = {
+    "Content-Type": "application/json",
+    "Authorization": f"Bearer {CENTRAL_API_KEY}",
+}
 
 ### PRESENT MESSAGE WITH CONTEXT ###
 
@@ -50,7 +55,7 @@ def present_message_with_context(message_info, model_provider, model_name, print
         'model_provider': model_provider,
         'model_name': model_name
     }
-    response = requests.get(f"{CENTRAL_API_BASE_URL}/llm_context_windows", params=params)
+    response = requests.get(f"{CENTRAL_API_BASE_URL}/llm_context_windows", params=params, headers=central_headers)
     if is_2xx_status_code(response.status_code):
         data = response.json()
         if data:

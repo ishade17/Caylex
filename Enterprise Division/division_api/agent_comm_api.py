@@ -3,7 +3,7 @@ import hashlib
 from flask import Flask, request, jsonify 
 from concurrent.futures import ThreadPoolExecutor
 
-from agent_comm_dist import process_message
+from agent_comm_dist import process_message, start_new_thread
 from global_vars import supabase, logger
 from connection_request_management import add_connection_to_local_database, create_api_key
 from send_message import auto_send_message
@@ -86,6 +86,17 @@ def receive_message():
         return jsonify({"error": "Internal Server Error"}), 500
     
 
+### START A NEW THREAD ###
+
+@app.route('/message/start_new_thread', methods=['POST'])
+def start_new_thread():
+    data = request.get_json()
+    message = data.get('message')
+    if not message:
+        return jsonify({"error": "No message data"}), 400
+    executor.submit(start_new_thread, message)
+    return jsonify({"message": "New thread started"}), 200
+
 ### RECEIVE CONNECTION REQUESTS ###
 
 @app.route('/connection/request/accept', methods=['POST'])
@@ -163,8 +174,8 @@ INSERT INTO connections (
     created_at
 ) VALUES (
     1,  -- central_connection_id
-    'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'::uuid,  -- source_division_id
-    'c0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'::uuid,  -- target_division_id
+    1,  -- source_division_id
+    2,  -- target_division_id
     0,  -- daily_messages_count
     '8d625c78b565f0b3d6684c10a4660a2f8c6e88bcffc2aebebade1862dab945ff',  -- raw API key
     now()
@@ -173,8 +184,7 @@ INSERT INTO connections (
 
 SELECT * FROM connections;
 
-^this worked.
-
+# new message in new thread
 
 docker exec division-api-server curl -X POST http://division-api:8002/message/receive \
   -H "Content-Type: application/json" \
@@ -182,13 +192,13 @@ docker exec division-api-server curl -X POST http://division-api:8002/message/re
   -d '{
     "message_entry": {
       "connection_id": 1,
-      "sender_division_id": 1,
-      "sender_division_tag": "saas_customer_success",
-      "sender_company_name": "SaaS Solutions",
-      "receiver_division_id": 2,
-      "receiver_division_tag": "consulting_firm_acct",
-      "receiver_company_name": "Consulting Firm",
-      "message_content": "Hello, World!",
+      "sender_division_id": 2,
+      "sender_division_tag": "consulting_firm_acct",
+      "sender_company_name": "Consulting Firm",
+      "receiver_division_id": 1,
+      "receiver_division_tag": "saas_customer_success",
+      "receiver_company_name": "SaaS Solutions",
+      "message_content": "@saas_customer_success Hello, World! @new_thread",
       "timestamp": "2024-11-08T12:00:00Z",
       "status": "sent",
       "thread_id": 2,
@@ -196,5 +206,35 @@ docker exec division-api-server curl -X POST http://division-api:8002/message/re
       "token_counts": {}
     }
   }'
+
+
+# new message in existing thread
+# for some reason, a new thread is being created here idk why
+docker exec division-api-server curl -X POST http://division-api:8002/message/receive \
+  -H "Content-Type: application/json" \
+  -H "X-API-KEY: 8d625c78b565f0b3d6684c10a4660a2f8c6e88bcffc2aebebade1862dab945ff" \
+  -d '{
+    "message_entry": {
+      "connection_id": 1,
+      "sender_division_id": 2,
+      "sender_division_tag": "consulting_firm_acct",
+      "sender_company_name": "Consulting Firm",
+      "receiver_division_id": 1,
+      "receiver_division_tag": "saas_customer_success",
+      "receiver_company_name": "SaaS Solutions",
+      "message_content": "@saas_customer_success second message @thread_6",
+      "timestamp": "2024-11-08T12:01:00Z",
+      "status": "sent",
+      "thread_id": 6,
+      "thread_msg_ordering": 2,
+      "token_counts": {}
+    }
+  }'
+
+  
+
+
+
+
 
 """

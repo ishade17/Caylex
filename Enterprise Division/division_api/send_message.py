@@ -4,10 +4,15 @@ import hashlib
 
 from datetime import datetime
 
-from global_vars import logger, supabase, openai_client, CENTRAL_API_BASE_URL, is_2xx_status_code, COMPANY_NAME
+from global_vars import logger, supabase, openai_client, CENTRAL_API_BASE_URL, CENTRAL_API_KEY, is_2xx_status_code, COMPANY_NAME
 from count_message_tokens import default_models, tokenizers
 from data_policy_rag import retrieve_relevant_document_chunks
 from database_interaction import find_connection, get_division_api_url
+
+central_headers = {
+    "Content-Type": "application/json",
+    "Authorization": f"Bearer {CENTRAL_API_KEY}",
+}
 
 ### SEND MESSAGES ###
 
@@ -83,7 +88,8 @@ def log_message(sender_division_id,
             "target_division_cost": 0.0001 if sender_division_id == connection['target_division_id'] else 0,
             "messages_count": 1
         }
-        create_thread_response = requests.post(f"{CENTRAL_API_BASE_URL}/threads", json=thread_entry)
+        create_thread_response = requests.post(f"{CENTRAL_API_BASE_URL}/threads", json=thread_entry, headers=central_headers)
+        logger.info(f"created a new thread in central database: {create_thread_response.json()}")
         if is_2xx_status_code(create_thread_response.status_code):
             thread_data = create_thread_response.json()
             thread_id = thread_data['thread_id']
@@ -93,7 +99,7 @@ def log_message(sender_division_id,
             return None, None, None, None
     else:
         # Update existing thread in the central database via API call
-        response = requests.get(f"{CENTRAL_API_BASE_URL}/threads/{thread_id}")
+        response = requests.get(f"{CENTRAL_API_BASE_URL}/threads/{thread_id}", headers=central_headers)
         if is_2xx_status_code(response.status_code):
             thread_data = response.json()
             if not thread_data:
@@ -101,14 +107,17 @@ def log_message(sender_division_id,
                 return None, None, None, None
             update_data = {
                 "messages_count": thread_data['messages_count'] + 1,
-                "last_message_timestamp": datetime.now().isoformat(),
+                "last_message_timestamp": datetime.now().replace(microsecond=0).isoformat(),
                 "source_division_cost": thread_data['source_division_cost'] + (0.0001 if sender_division_id == connection['source_division_id'] else 0),
                 "target_division_cost": thread_data['target_division_cost'] + (0.0001 if sender_division_id == connection['target_division_id'] else 0)
             }
-            update_thread_response = requests.put(f"{CENTRAL_API_BASE_URL}/threads/{thread_id}", json=update_data)
+            update_thread_response = requests.put(f"{CENTRAL_API_BASE_URL}/threads/{thread_id}", json=update_data, headers=central_headers)
             if is_2xx_status_code(update_thread_response.status_code):
-            # if not update_thread_response:
+                logger.info(f"updated the thread in central database: {update_thread_response.json()}")
+            else:
                 logger.error("Error updating thread in central database.")
+                logger.error(f"updated thread response: {update_thread_response.json()}")
+                logger.error(f"update_thread_response status code: {update_thread_response.status_code}")
                 return None, None, None, None
             thread_msg_ordering = thread_data['messages_count'] + 1
         else:
@@ -166,6 +175,10 @@ def log_message(sender_division_id,
         receiver_message_id = receiver_response.get('message_id')
     else:
         logger.error(f"Error sending message to receiver division: {response.status_code}")
+        logger.error(f"receiver_api_url: {receiver_api_url}")
+        logger.error(f"data_to_send: {data_to_send}")
+        logger.error(f"headers: {headers}")
+        logger.error(f"response: {response.json()}")
         return None, None, None, None
 
     return sender_result.data[0]['message_id'], receiver_message_id, thread_id, thread_msg_ordering
@@ -255,7 +268,7 @@ def send_message(sender_division_id,
     return True, sender_message_id, receiver_message_id, thread_id, thread_msg_ordering, connection
 
 def auto_send_message(sender_division_id, 
-                      message, 
+                      message,
                       print_statements=False):
     
     logger.info("Entered auto_send_message()")
@@ -273,22 +286,28 @@ def auto_send_message(sender_division_id,
     # Determine thread ID
     if new_thread_tags:
         thread_id = "new thread"
+        logger.info("New thread initiated.")
     elif thread_tags:
         if len(thread_tags) > 1:
             logger.error("Error: Multiple thread tags detected. Please specify only one.")
             return None
         thread_id = int(thread_tags[0])
+        logger.info(f"Existing thread ID: {thread_id}")
     else:
         thread_id = None
+        logger.info("No thread tag detected. Message will be sent in a new thread.")
 
     if len(division_tags) != 1:
-        logger.error("Error: Please specify exactly one division tag.")
+        logger.error(f"Error: Please specify exactly one division tag. {division_tags}, {thread_tags}, {new_thread_tags}")
+        logger.error(f"Message: {message}")
+        logger.error(f"thread_id: {thread_id}")
         return None
 
     # Get receiver division ID from the tag
     receiver_division_tag = division_tags[0]
+
     # Query central database via API to get receiver division details
-    receiver_tag_response = requests.get(f"{CENTRAL_API_BASE_URL}/divisions/tag/{receiver_division_tag}")
+    receiver_tag_response = requests.get(f"{CENTRAL_API_BASE_URL}/divisions/tag/{receiver_division_tag}", headers=central_headers)
     if is_2xx_status_code(receiver_tag_response.status_code):
         division_info = receiver_tag_response.json()
         receiver_division_id = division_info['id']
@@ -296,19 +315,19 @@ def auto_send_message(sender_division_id,
         receiver_division_tag = division_info['tag']
 
         # Get receiver company name
-        receiver_response_company = requests.get(f"{CENTRAL_API_BASE_URL}/companies/{receiver_company_id}")
+        receiver_response_company = requests.get(f"{CENTRAL_API_BASE_URL}/companies/{receiver_company_id}", headers=central_headers)
         if is_2xx_status_code(receiver_response_company.status_code):
             receiver_company_info = receiver_response_company.json()
             receiver_company_name = receiver_company_info['name']
         else:
-            logger.error("Error retrieving receiver company information.")
+            logger.error(f"Error {receiver_response_company.status_code}: did not properly retrieve company information.")
             return None
     else:
-        logger.error("Error: No division found with the specified tag.")
+        logger.error(f"Error {receiver_tag_response.status_code}: No division found with the specified tag: {receiver_division_tag}")
         return None
 
     # Query central database via API to get sender division info
-    sender_response_division = requests.get(f"{CENTRAL_API_BASE_URL}/divisions/{sender_division_id}")
+    sender_response_division = requests.get(f"{CENTRAL_API_BASE_URL}/divisions/{sender_division_id}", headers=central_headers)
     if is_2xx_status_code(sender_response_division.status_code):
         division_info = sender_response_division.json()
         sender_division_tag = division_info['tag']
@@ -325,7 +344,7 @@ def auto_send_message(sender_division_id,
         #     logger.error("Error retrieving sender company information.")
         #     return None
     else:
-        logger.error("Error retrieving sender division information.")
+        logger.error(f"Error {sender_response_division.status_code}: did not properly retrieve sender division information.")
         return None
 
     # Clean message by removing tags

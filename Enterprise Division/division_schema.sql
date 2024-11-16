@@ -5,8 +5,8 @@ CREATE EXTENSION IF NOT EXISTS vector;
 CREATE TABLE IF NOT EXISTS connections (
     local_connection_id SERIAL PRIMARY KEY,
     central_connection_id INT UNIQUE,  -- Added field to map to central database
-    source_division_id UUID NOT NULL,
-    target_division_id UUID NOT NULL,
+    source_division_id INT NOT NULL,
+    target_division_id INT NOT NULL,
     daily_messages_count INT,
     raw_api_key TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now()

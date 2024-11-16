@@ -16,7 +16,9 @@ supabase_key = os.getenv('SUPABASE_KEY')
 supabase: Client = create_client(supabase_url, supabase_key)
 
 # Configure logging
+logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
+app.logger.setLevel(logging.INFO)
 
 def require_api_key(f):
     @wraps(f)
@@ -52,6 +54,11 @@ def create_thread():
         if field not in data:
             return jsonify({"error": f"'{field}' is required"}), 400
 
+    # TODO: we are failing somewhere in here...
+    app.logger.info(f"thread data: {data}")
+    logger.info(f"thread data: {data}")
+    print(f"thread data: {data}")
+
     # Validate data types
     if not isinstance(data['connection_id'], int):
         return jsonify({"error": "'connection_id' must be an integer"}), 400
@@ -59,25 +66,42 @@ def create_thread():
         return jsonify({"error": "'messages_count' must be an integer"}), 400
     try:
         # Validate 'last_message_timestamp' format
-        datetime.strptime(data['last_message_timestamp'], '%Y-%m-%dT%H:%M:%S')
+        # Check if microseconds are present
+        if "." in data['last_message_timestamp']:
+            # Parse with microseconds and remove them
+            timestamp = datetime.strptime(data['last_message_timestamp'], '%Y-%m-%dT%H:%M:%S.%f')
+        else:
+            # Parse without microseconds
+            timestamp = datetime.strptime(data['last_message_timestamp'], '%Y-%m-%dT%H:%M:%S')
+        # Standardize the timestamp format (without microseconds)
+        data['last_message_timestamp'] = timestamp.strftime('%Y-%m-%dT%H:%M:%S')
     except ValueError:
+        app.logger.error(f"Error: 'last_message_timestamp' is not in ISO format: {data['last_message_timestamp']}")
+        logger.error(f"Error: 'last_message_timestamp' is not in ISO format: {data['last_message_timestamp']}")
         return jsonify({"error": "'last_message_timestamp' must be in ISO format YYYY-MM-DDTHH:MM:SS"}), 400
     except KeyError:
+        app.logger.error(f"Error: 'last_message_timestamp' is required")
+        logger.error(f"Error: 'last_message_timestamp' is required")
         return jsonify({"error": "'last_message_timestamp' is required"}), 400
 
     try:
         data['source_division_cost'] = float(data['source_division_cost'])
         data['target_division_cost'] = float(data['target_division_cost'])
     except ValueError:
+        app.logger.error(f"Error: 'source_division_cost' and 'target_division_cost' must be numbers: {data['source_division_cost']} and {data['target_division_cost']}")
+        logger.error(f"Error: 'source_division_cost' and 'target_division_cost' must be numbers: {data['source_division_cost']} and {data['target_division_cost']}")
         return jsonify({"error": "'source_division_cost' and 'target_division_cost' must be numbers"}), 400
 
     try:
         result = supabase.table("collab_threads").insert(data).execute()
         if not result.data:
+            app.logger.error(f"Error: Unable to create thread")
+            logger.error(f"Error: Unable to create thread")
             return jsonify({"error": "Unable to create thread"}), 400
         return jsonify(result.data[0]), 201  # Return 201 Created
     except Exception as e:
         app.logger.error(f"Error creating thread: {e}")
+        logger.error(f"Error creating thread: {e}")
         return jsonify({"error": "Internal Server Error"}), 500
 
 @app.route('/threads/<int:thread_id>', methods=['GET'])
@@ -90,6 +114,7 @@ def get_thread(thread_id):
     try:
         result = supabase.table("collab_threads").select("*").eq("thread_id", thread_id).execute()
         if not result.data:
+            logger.error(f"Error: Thread not found")
             abort(404, description="Thread not found")
         return jsonify(result.data[0]), 200
     except Exception as e:
@@ -130,6 +155,7 @@ def get_llm_context_windows():
         result = supabase.table("llm_context_windows").select("*").eq("model_provider", model_provider).eq("model_name", model_name).execute()
         if not result.data:
             abort(404, description="Context window not found")
+        logger.info(f"Successfully fetched LLM context windows for {model_provider} {model_name}")
         return jsonify(result.data[0]), 200
     except Exception as e:
         app.logger.error(f"Error fetching LLM context windows: {e}")
@@ -169,8 +195,8 @@ def get_division_by_id(division_id):
         app.logger.error(f"Error fetching division by ID: {e}")
         return jsonify({"error": "Internal Server Error"}), 500
 
-# POST /divisions
-@app.route('/divisions', methods=['POST'])
+# POST /divisions/insert
+@app.route('/divisions/insert', methods=['POST'])
 @require_api_key
 def insert_division():
     """

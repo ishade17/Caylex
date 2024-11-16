@@ -24,7 +24,7 @@ genai.configure(api_key=os.getenv("GOOGLE_KEY"))
 
 # Example 1
 def openai_agent(prompt, system_prompt="You are a helpful assistant."):
-    system_prompt = "You are a helpful assistant that specializing in working with companies in the finance industry to build custom data integrations with Bloomberg for their data science, risk management, and trading teams. Your communication style should be very logical and concise, and you are very results-driven. You should produce tangible work products."
+    # system_prompt = "You are a helpful assistant that specializing in working with companies in the finance industry to build custom data integrations with Bloomberg for their data science, risk management, and trading teams. Your communication style should be very logical and concise, and you are very results-driven. You should produce tangible work products."
     agent_response = openai_client.chat.completions.create(
             messages=[
                 { 
