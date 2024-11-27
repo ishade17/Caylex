@@ -5,7 +5,7 @@ services:
     container_name: division-api-server
     restart: unless-stopped
     ports:
-      - '8001:8000'  # Exposes the API server on port 8001
+      - '8002:8000'  # Exposes the API server on port 8000
     environment:
       # Supabase configuration
       SUPABASE_URL: ${SUPABASE_URL}
@@ -18,13 +18,13 @@ services:
       GOOGLE_KEY: ${GOOGLE_KEY}
       AGENT_COMM_API_BASE_URL: ${AGENT_COMM_API_BASE_URL}
       CUSTOMER_AGENT_BASE_URL: ${CUSTOMER_AGENT_BASE_URL}
+      DIVISION_TAG: ${DIVISION_TAG}
       COMPANY_NAME: ${COMPANY_NAME}
+      
 
     depends_on:
       - kong  # Supabase's API gateway
 
-    # networks:
-    #   - api_internal
 
   db:
     volumes:
@@ -40,16 +40,6 @@ services:
 
       - ../../division_schema.sql:/docker-entrypoint-initdb.d/init-scripts/999-division_schema.sql:Z
 
-    # networks:
-    #   - api_internal
-
-  # kong:
-  #   networks:
-  #     - api_internal
-
-# networks:
-#   api_internal:
-#     name: api_internal
 
 volumes:
   db-config:

@@ -1,6 +1,4 @@
 import requests
-import secrets
-import hashlib
 
 # TODO: need to add to requirements.txt ?
 import argparse
@@ -41,13 +39,6 @@ def register_division(company_id, name, tag):
         logger.error(f"Error registering division: {response.status_code} - {response.text}")
         return None
 
-# TODO: need to figure out how to share the new created api key with the other division
-# TODO: there really should be a send connection request endpoint (maybe that's when we create/share the key?)
-def create_api_key():
-    raw_api_key = secrets.token_hex(32)
-    hashed_api_key = hashlib.sha256(raw_api_key.encode()).hexdigest()
-    return raw_api_key, hashed_api_key
-
 def add_connection(source_division_id, target_division_id, hashed_api_key, daily_messages_count=0):
     data = {
         "source_division_id": source_division_id,
@@ -62,8 +53,16 @@ def add_connection(source_division_id, target_division_id, hashed_api_key, daily
     else:
         logger.error(f"Error adding connection: {response.status_code} - {response.text}")
         return None, None
+    
+def get_local_connection_id(central_connection_id):
+    result = supabase.table("connections").select("local_connection_id").eq("central_connection_id", central_connection_id).execute()
+    if result.data:
+        return result.data[0]['local_connection_id']
+    else:
+        return None
 
-def find_connection(sender_division_id, receiver_division_id):
+def find_connection(sender_division_id, receiver_division_id, hashed_api_key=""):
+    approved_to_send_message = False
     params = {
         'division_id_1': sender_division_id,
         'division_id_2': receiver_division_id
@@ -72,25 +71,35 @@ def find_connection(sender_division_id, receiver_division_id):
     if is_2xx_status_code(response.status_code):
         connections = response.json()
         if connections:
-            return connections[0]
+            connection = connections[0]
+            if hashed_api_key == "":
+                return connection, approved_to_send_message, None
+            elif connection['api_key'] == hashed_api_key:
+                approved_to_send_message = True
+                local_connection_id = get_local_connection_id(connection['id'])
+                return connection, approved_to_send_message, local_connection_id
+            else:
+                logger.error(f"API key does not match for connection between {sender_division_id} and {receiver_division_id}")
+                return None, approved_to_send_message, None
         else:
-            return None  # No connection found
+            logger.error(f"No connection found between {sender_division_id} and {receiver_division_id}")
+            return None, approved_to_send_message, None
     else:
         error_message = response.json().get('error', 'Unknown error')
         logger.error(f"Error querying central database: {response.status_code} - {error_message}")
-        return None  # Early exit on error
+        return None, approved_to_send_message, None
 
 def insert_data_policy(sender_division_id, receiver_division_id, confidentiality, data_type, explanation):
     # Look up the connection using API call to central database
-    connection = find_connection(sender_division_id, receiver_division_id)
+    connection, _, local_connection_id = find_connection(sender_division_id, receiver_division_id)
     if not connection:
         return "No valid connection found between the specified divisions."
     
-    connection_id = connection['id']
+    # connection_id = connection['id']
 
     # Insert data into the division's own 'custom_data_policies' table
     data = {
-        "connection_id": connection_id,
+        "connection_id": local_connection_id,
         "confidentiality": confidentiality,
         "data_type": data_type,
         "natural_language_explanation": explanation
@@ -121,6 +130,7 @@ def get_division_id_from_tag(division_tag):
     else:
         logger.error(f"Error getting division ID: {response.status_code} - {response.text}")
         return None
+
 
 ### Main Function for CLI Interface ###
 

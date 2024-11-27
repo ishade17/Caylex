@@ -18,7 +18,9 @@ services:
       GOOGLE_KEY: ${GOOGLE_KEY}
       AGENT_COMM_API_BASE_URL: ${AGENT_COMM_API_BASE_URL}
       CUSTOMER_AGENT_BASE_URL: ${CUSTOMER_AGENT_BASE_URL}
+      DIVISION_TAG: ${DIVISION_TAG}
       COMPANY_NAME: ${COMPANY_NAME}
+      
 
     depends_on:
       - kong  # Supabase's API gateway

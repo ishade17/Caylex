@@ -7,7 +7,7 @@ import numpy as np
 from semantic_router.encoders import OpenAIEncoder
 from semantic_router.splitters import RollingWindowSplitter
 
-from global_vars import logger, supabase, company_name, openai_client, is_2xx_status_code
+from global_vars import logger, supabase, COMPANY_NAME, openai_client, is_2xx_status_code
 from database_interaction import find_connection
 
 ### RAG FOR DATA POLICIES ###
@@ -100,17 +100,17 @@ def split_store_chunks():
         # Extract text and process
         text = extract_text_from_pdf(temp_file_path)
         splits = splitter([text])
-        policy_chunks = [build_text_chunk(company_name, split.content, True) for split in splits]
+        policy_chunks = [build_text_chunk(COMPANY_NAME, split.content, True) for split in splits]
         store_policy_chunks(policy_chunks, document_id)
 
         # Remove the temporary file
         os.remove(temp_file_path)
 
-def retrieve_relevant_document_chunks(query, connection, threshold=0.7, top_k=5, sender_division_id=None, receiver_division_id=None):
+def retrieve_relevant_document_chunks(query, local_connection_id, threshold=0.7, top_k=5, sender_division_id=None, receiver_division_id=None):
     # For testing in isolation
-    if not connection:
+    if not local_connection_id:
         if sender_division_id and receiver_division_id:
-            connection = find_connection(sender_division_id, receiver_division_id)
+            connection, _, local_connection_id = find_connection(sender_division_id, receiver_division_id)
         else:
             return "No valid connection found or provided."
 
@@ -124,7 +124,7 @@ def retrieve_relevant_document_chunks(query, connection, threshold=0.7, top_k=5,
         query_embedding = query_embedding.numpy().tolist()
 
     # Get the IDs of document chunks applicable to this connection
-    document_ids_result = supabase.table("document_connections").select("document_id").eq("connection_id", connection['id']).execute()
+    document_ids_result = supabase.table("document_connections").select("document_id").eq("connection_id", local_connection_id).execute()
     if not document_ids_result.data:
         print("No data policy documents found for this connection.")
         return None

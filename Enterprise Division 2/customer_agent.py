@@ -4,8 +4,13 @@ from flask import Flask, request, jsonify
 
 from openai import OpenAI
 import google.generativeai as genai
+from dotenv import load_dotenv 
+
 
 app = Flask(__name__)
+
+# Load environment variables from .env file
+load_dotenv()
 
 # theoretically, these will be the customer's api keys
 # we don't need the parent directory because the .env file is in the same folder right now
@@ -19,7 +24,7 @@ genai.configure(api_key=os.getenv("GOOGLE_KEY"))
 
 # Example 1
 def openai_agent(prompt, system_prompt="You are a helpful assistant."):
-    system_prompt = "You are a helpful assistant that specializing in working with companies in the finance industry to build custom data integrations with Bloomberg for their data science, risk management, and trading teams. Your communication style should be very logical and concise, and you are very results-driven. You should produce tangible work products."
+    # system_prompt = "You are a helpful assistant that specializing in working with companies in the finance industry to build custom data integrations with Bloomberg for their data science, risk management, and trading teams. Your communication style should be very logical and concise, and you are very results-driven. You should produce tangible work products."
     agent_response = openai_client.chat.completions.create(
             messages=[
                 { 
@@ -66,7 +71,7 @@ def ai_agent_info():
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5001)
+    app.run(host='0.0.0.0', port=5004)
 
 
 

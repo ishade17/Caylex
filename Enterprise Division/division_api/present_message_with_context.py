@@ -1,4 +1,5 @@
 import requests
+import re
 
 from global_vars import supabase, logger, CENTRAL_API_BASE_URL, is_2xx_status_code, CENTRAL_API_KEY
 
@@ -19,10 +20,15 @@ def format_message_chain(context_messages, division_mapping, print_statements=Fa
         sender_info = f"Division {division_mapping[msg['sender_division_id']][1]} said:\n"
         if msg_num == len(context_messages) - 1:
             sender_info = "-- Current message to respond to --\n\n" + sender_info
-        context += f"{sender_info} {msg['message_content']}\n\n"
+        # TODO: realistically we probably should be a bit more sophistaced about what we omit
+        # for example an "@" sign could naturally come up so we probably want to only detect @thread_<id> and division tags
+        clean_message = re.sub(r"@[\w_]+", "", msg['message_content']).strip()
+        context += f"{sender_info} {clean_message}\n\n"
     return context
 
 def fetch_thread_context(thread_id, model_provider, max_tokens, print_statements=False):
+    print(f"entered fetch_thread_context")
+
     messages = supabase.table("messages").select("*").eq("thread_id", thread_id).order("thread_msg_ordering", desc=True).execute()
 
     if not messages.data:
@@ -32,6 +38,7 @@ def fetch_thread_context(thread_id, model_provider, max_tokens, print_statements
     accumulated_tokens = 0
     context_messages = []
 
+    print(f"about to build context_messages list")
     for message in reversed(messages.data):
         # Get the proper way to count tokens for a given FM provider
         message_tokens = message['token_counts'].get(model_provider, 0)
@@ -46,10 +53,11 @@ def fetch_thread_context(thread_id, model_provider, max_tokens, print_statements
         accumulated_tokens += message_tokens
     if print_statements:
         print(f"accumulated_tokens: {accumulated_tokens}, max_tokens: {max_tokens}")
+    print(f"accumulated_tokens: {accumulated_tokens}, max_tokens: {max_tokens}, context_messages: {context_messages}")
     return context_messages
 
 def present_message_with_context(message_info, model_provider, model_name, print_statements=False):
-
+    print("entered present_message_with_context")
     # Get context window length from central database via API call
     params = {
         'model_provider': model_provider,
@@ -58,6 +66,7 @@ def present_message_with_context(message_info, model_provider, model_name, print
     response = requests.get(f"{CENTRAL_API_BASE_URL}/llm_context_windows", params=params, headers=central_headers)
     if is_2xx_status_code(response.status_code):
         data = response.json()
+        print(f"retreived context windows: {data}")
         if data:
             max_tokens = data['context_window_length']
         else:
@@ -73,7 +82,7 @@ def present_message_with_context(message_info, model_provider, model_name, print
         model_provider,
         max_tokens=max_tokens
     )
-
+    print(f"thread_context: {thread_context}")
     # Construct division mapping with company names and division tags
     division_mapping = {
         message_info['sender_division_id']: [message_info['sender_company_name'], message_info['sender_division_tag']],

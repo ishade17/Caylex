@@ -67,6 +67,7 @@ def log_message(sender_division_id,
                 print_statements=False):
     
     logger.info("Entered log_message()")
+    print(("Entered log_message()"))
 
     # Calculate token counts
     token_counts = {}
@@ -75,6 +76,8 @@ def log_message(sender_division_id,
         token_counts[provider] = count_function(message, default_model)
     if print_statements:
         print(f"token_counts in log_message(): {token_counts}")
+    
+    print(f"tokens counted...")
 
     # TODO: just noticed we are not writing any data to the local collab_threads data tables (i think this is okay?)
     # but this might mean that we don't need them.
@@ -88,8 +91,10 @@ def log_message(sender_division_id,
             "target_division_cost": 0.0001 if sender_division_id == connection['target_division_id'] else 0,
             "messages_count": 1
         }
+        print("about to hit the threads post endpoint in the central api")
         create_thread_response = requests.post(f"{CENTRAL_API_BASE_URL}/threads", json=thread_entry, headers=central_headers)
         logger.info(f"created a new thread in central database: {create_thread_response.json()}")
+        print(f"created a new thread in central database: {create_thread_response.json()}")
         if is_2xx_status_code(create_thread_response.status_code):
             thread_data = create_thread_response.json()
             thread_id = thread_data['thread_id']
@@ -99,6 +104,7 @@ def log_message(sender_division_id,
             return None, None, None, None
     else:
         # Update existing thread in the central database via API call
+        print("about to hit the threads/thread_id get endpoint in the central api")
         response = requests.get(f"{CENTRAL_API_BASE_URL}/threads/{thread_id}", headers=central_headers)
         if is_2xx_status_code(response.status_code):
             thread_data = response.json()
@@ -111,9 +117,11 @@ def log_message(sender_division_id,
                 "source_division_cost": thread_data['source_division_cost'] + (0.0001 if sender_division_id == connection['source_division_id'] else 0),
                 "target_division_cost": thread_data['target_division_cost'] + (0.0001 if sender_division_id == connection['target_division_id'] else 0)
             }
+            print("successfully got the thread, now about to hit the threads put endpoint")
             update_thread_response = requests.put(f"{CENTRAL_API_BASE_URL}/threads/{thread_id}", json=update_data, headers=central_headers)
             if is_2xx_status_code(update_thread_response.status_code):
                 logger.info(f"updated the thread in central database: {update_thread_response.json()}")
+                print(f"updated the thread in central database: {update_thread_response.json()}")
             else:
                 logger.error("Error updating thread in central database.")
                 logger.error(f"updated thread response: {update_thread_response.json()}")
@@ -141,19 +149,19 @@ def log_message(sender_division_id,
         "thread_msg_ordering": thread_msg_ordering,
         "token_counts": token_counts,
     }
-
+    print(f"message_entry in log_message(): {message_entry}")
     if print_statements:
         print(f"message_entry in log_message(): {message_entry}")
 
     # Insert the message into the sender's local database
     sender_result = supabase.table("messages").insert(message_entry).execute()
-        
+    print(f"inserted message into sender's local db: {sender_result}")
     # Send API request to receiver division to log the message in their database
     receiver_api_url = get_division_api_url(receiver_division_id)
     if not receiver_api_url:
         print("Cannot find receiver division's API URL.")
         return None, None, None, None
-
+    print(f"receiver_api_url: {receiver_api_url}")
     # Retrieve the API key for the connection (assuming it's available)
     # using the raw_api_key instead of connection['api_key'] because message_entry is inserted into the local databases.
     if not raw_api_key:
@@ -168,11 +176,14 @@ def log_message(sender_division_id,
     headers = {
         "X-API-KEY": raw_api_key
     }
-
+    print(f"about to hit the messages/receive endpoint")
     response = requests.post(f"{receiver_api_url}/messages/receive", json=data_to_send, headers=headers)
+    logger.info(f"Message received response: {response.json()}")
+    print(f"Message received response: {response.json()}")
     if is_2xx_status_code(response.status_code):
         receiver_response = response.json()
         receiver_message_id = receiver_response.get('message_id')
+        print(f"successfully executed the messages/receive endpoint")
     else:
         logger.error(f"Error sending message to receiver division: {response.status_code}")
         logger.error(f"receiver_api_url: {receiver_api_url}")
@@ -206,6 +217,7 @@ def send_message(sender_division_id,
                  print_statements=False):
     
     logger.info("Entered send_message()")
+    print(("Entered send_message()"))
 
     # Find connection via API call
     raw_api_key, hashed_api_key = get_raw_hashed_api_keys(sender_division_id, receiver_division_id)
@@ -272,7 +284,7 @@ def auto_send_message(sender_division_id,
                       print_statements=False):
     
     logger.info("Entered auto_send_message()")
-
+    print(f"Entered auto_send_message() with message: '{message}' from {sender_division_id}")
     # Regex patterns to find tags
     division_tag_pattern = re.compile(r"@(?!thread_|new_thread)([a-zA-Z0-9_]+)")
     thread_tag_pattern = re.compile(r"@thread_(\d+)")
@@ -305,6 +317,8 @@ def auto_send_message(sender_division_id,
 
     # Get receiver division ID from the tag
     receiver_division_tag = division_tags[0]
+    print(f"receiver_division_tag: {receiver_division_tag}")
+    logger.info(f"receiver_division_tag: {receiver_division_tag}")
 
     # Query central database via API to get receiver division details
     receiver_tag_response = requests.get(f"{CENTRAL_API_BASE_URL}/divisions/tag/{receiver_division_tag}", headers=central_headers)
@@ -366,10 +380,10 @@ def auto_send_message(sender_division_id,
         receiver_company_name,
         thread_id if thread_id else "new thread"
     )
-
+    print(f"reached after send_message() within auto_send_message()")
     if not compliance_pass:
         return None
-
+    
     message_info = {
         "sender_company_name": COMPANY_NAME,
         "receiver_company_name": receiver_company_name,
@@ -382,5 +396,6 @@ def auto_send_message(sender_division_id,
         "thread_msg_ordering": thread_msg_ordering,
         "connection_id": connection['id']
     }
-
+    print(f"end of auto_send_message, message_info: {message_info}")
+    
     return message_info

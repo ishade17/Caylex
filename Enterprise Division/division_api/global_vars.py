@@ -6,6 +6,7 @@ from openai import OpenAI
 from sentence_transformers import SentenceTransformer
 import google.generativeai as genai
 import logging
+import sys
 from dotenv import load_dotenv 
 
 
@@ -17,17 +18,32 @@ from dotenv import load_dotenv
 # dotenv_path = os.path.join(parent_directory, ".env")
 # load_dotenv(dotenv_path)
 
-logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
+# Configure the global logger
+logger = logging.getLogger("agent_comm_logger")  # Use a consistent logger name across the app
+logger.setLevel(logging.INFO)
+
+# Create a stream handler to send logs to stdout
+stream_handler = logging.StreamHandler(sys.stdout)
+stream_handler.setLevel(logging.INFO)
+
+# Set a formatter
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+stream_handler.setFormatter(formatter)
+
+# Add the handler if not already added
+if not logger.handlers:
+    logger.addHandler(stream_handler)
+
+# Ensure thread-safe logging
+logger.propagate = False
 
 # Load environment variables from .env file
 load_dotenv()
 
 # Print all environment variables
-for key, value in os.environ.items():
-    print(f"{key}: {value}")
-    logger.debug(f"{key}: {value}")
-
+# for key, value in os.environ.items():
+#     print(f"{key}: {value}")
+#     logger.info(f"{key}: {value}")
 
 # Connect to Supabase
 supabase_url = os.getenv('SUPABASE_URL')
@@ -54,12 +70,16 @@ genai.configure(api_key=os.getenv("GOOGLE_KEY"))
 
 COMPANY_NAME = os.getenv('COMPANY_NAME')
 DIVISION_TAG = os.getenv('DIVISION_TAG')
+if not COMPANY_NAME or not DIVISION_TAG:
+    logger.error(f"COMPANY_NAME {COMPANY_NAME} and DIVISION_TAG {DIVISION_TAG} must be set in environment variables.-----")
+    raise EnvironmentError("COMPANY_NAME and DIVISION_TAG must be set in environment variables.")
 
 ### API URLS ###
 
 CENTRAL_API_BASE_URL = os.getenv('CENTRAL_API_BASE_URL')
 CENTRAL_API_KEY = os.getenv('CENTRAL_API_KEY')
 if not CENTRAL_API_BASE_URL or not CENTRAL_API_KEY:
+    logger.error("CENTRAL_API_URL and CENTRAL_API_KEY must be set in environment variables.")
     raise EnvironmentError("CENTRAL_API_URL and CENTRAL_API_KEY must be set in environment variables.")
 
 

@@ -1,4 +1,5 @@
 import hashlib
+import logging
 
 from flask import Flask, request, jsonify 
 from concurrent.futures import ThreadPoolExecutor
@@ -14,12 +15,16 @@ from present_message_with_context import present_message_with_context
 
 app = Flask(__name__)
 
+app.logger.handlers = logger.handlers
+app.logger.setLevel(logger.level)
+
 executor = ThreadPoolExecutor(max_workers=10)
 
 # Endpoint to receive and store messages
 @app.route('/message/receive', methods=['POST'])
 def receive_message():
     logger.info("/message/receive endpoint hit")
+    print("/message/receive endpoint hit")
     try:
         # Extract API Key from headers
         raw_api_key = request.headers.get('X-API-KEY')
@@ -71,14 +76,16 @@ def receive_message():
         result = supabase.table("messages").insert(message_entry).execute()
 
         logger.info("Within receive_message(), about to execute process_message function")
+        print("Within receive_message(), about to execute process_message function")
 
         # Process message asynchronously with context
         # process_message() calls auto_send_message(), which calls the receive_message() endpoint.
         # this is okay because this is the messsaging loop, but we cant have this for testing.
-        executor.submit(process_message, message_entry)
+        # executor.submit(process_message, message_entry)
+        process_message(message_entry)
 
         logger.info("Within receive_message(), finished with the process_message function")
-
+        print("Within receive_message(), finished with the process_message function")
         return jsonify({"message_id": result.data[0]['message_id']}), 200
 
     except Exception as e:
@@ -88,13 +95,30 @@ def receive_message():
 
 ### START A NEW THREAD ###
 
-@app.route('/message/start_new_thread', methods=['POST'])
-def start_new_thread():
+@app.route('/message/new_thread', methods=['POST'])
+def new_thread():
     data = request.get_json()
     message = data.get('message')
+    logger.info(f"Within new_thread(): {data}")
+    print(f"Within new_thread(): {data}")
     if not message:
         return jsonify({"error": "No message data"}), 400
-    executor.submit(start_new_thread, message)
+    
+    logger.info("start_new_thread() called synchronously")
+    print("start_new_thread() called synchronously")
+    start_new_thread(message)
+
+    try:
+        logger.info("start_new_thread() called asynchronously")
+        print("start_new_thread() called asynchronously")
+        future = executor.submit(start_new_thread, message)
+        logger.info("Task submitted to ThreadPoolExecutor")
+        print("Task submitted to ThreadPoolExecutor")
+    except Exception as e:
+        logger.error(f"Error submitting task to ThreadPoolExecutor: {e}")
+        print(f"Error submitting task to ThreadPoolExecutor: {e}")
+
+    # executor.submit(start_new_thread, message)
     return jsonify({"message": "New thread started"}), 200
 
 ### RECEIVE CONNECTION REQUESTS ###
@@ -156,9 +180,17 @@ def api_present_message_with_context():
     context = present_message_with_context(message_info, model_provider, model_name)
     return jsonify({'context': context})
 
+# Be sure to change port when copied over to Enterprise Division 2
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8002)
 
+
+# TODO: first test out the new_thread endpoint -- make sure auto_send is executing (it won't actually send until next step...)
+# then try running communication across two divisions -- you'll need to start up: 
+# - division-api-server from enterprise division 1 (port 8002) + kong (port 8000) + customer agent 1 (port 5001), 
+# - division-api-server from enterprise division 2 (port 5003) + kong (port 8001) + customer agent 2 (port 5004)
+# - central-api-server (port 8001)
+# we also need to add an end condition on sending messages
 
 """
 test the agent communication api endpoints from terminal:
@@ -185,7 +217,7 @@ INSERT INTO connections (
 SELECT * FROM connections;
 
 # new message in new thread
-
+# this is a message incoming to saas_customer_success (the division we're testing on)
 docker exec division-api-server curl -X POST http://division-api:8002/message/receive \
   -H "Content-Type: application/json" \
   -H "X-API-KEY: 8d625c78b565f0b3d6684c10a4660a2f8c6e88bcffc2aebebade1862dab945ff" \
@@ -209,7 +241,7 @@ docker exec division-api-server curl -X POST http://division-api:8002/message/re
 
 
 # new message in existing thread
-# for some reason, a new thread is being created here idk why
+# this is a message incoming to saas_customer_success (the division we're testing on)
 docker exec division-api-server curl -X POST http://division-api:8002/message/receive \
   -H "Content-Type: application/json" \
   -H "X-API-KEY: 8d625c78b565f0b3d6684c10a4660a2f8c6e88bcffc2aebebade1862dab945ff" \
@@ -233,7 +265,21 @@ docker exec division-api-server curl -X POST http://division-api:8002/message/re
 
   
 
+# this is a message being sent out from saas_customer_success (the division we're testing on) on a new thread
+docker exec division-api-server curl -X POST http://division-api:8002/message/new_thread \
+  -H "Content-Type: application/json" \
+  -H "X-API-KEY: 8d625c78b565f0b3d6684c10a4660a2f8c6e88bcffc2aebebade1862dab945ff" \
+  -d '{
+    "message": "@consulting_firm_acct please devise a plan for building a custom data pipeline that intakes news articles and outputs summaries @new_thread"
+}'
 
+# this is a message being sent out from saas_customer_success (the division we're testing on) on an existing thread
+docker exec division-api-server curl -X POST http://division-api:8002/message/new_thread \
+  -H "Content-Type: application/json" \
+  -H "X-API-KEY: 8d625c78b565f0b3d6684c10a4660a2f8c6e88bcffc2aebebade1862dab945ff" \
+  -d '{
+    "message": "@consulting_firm_acct second message @thread_6"
+}'
 
 
 
