@@ -19,7 +19,7 @@ RUN apt update && apt install -y curl
 COPY . .
 
 # Expose port 8002 for the Flask app
-EXPOSE 8002
+EXPOSE 5003
 
 # Run the application using Gunicorn
-CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:8002", "agent_comm_api:app", "--log-level=info"]
+CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:5003", "agent_comm_api:app", "--log-level=info"]

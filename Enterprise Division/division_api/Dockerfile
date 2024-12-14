@@ -22,4 +22,4 @@ COPY . .
 EXPOSE 8002
 
 # Run the application using Gunicorn
-CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:8002", "agent_comm_api:app", "--log-level=info"]
+CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:8002", "agent_comm_api:app", "--log-level=info", "--capture-output", "--error-logfile", "-"]

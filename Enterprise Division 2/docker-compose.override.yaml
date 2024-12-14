@@ -1,11 +1,11 @@
 services:
   division-api:
     build:
-      context: ../../division_api  # Adjust the path if necessary
-    container_name: division-api-server
+      context: ../../division_api
+    # container_name: division-api-server
     restart: unless-stopped
     ports:
-      - '8002:8000'  # Exposes the API server on port 8000
+      - '5003:5003'
     environment:
       # Supabase configuration
       SUPABASE_URL: ${SUPABASE_URL}
@@ -25,8 +25,91 @@ services:
     depends_on:
       - kong  # Supabase's API gateway
 
+  analytics:
+    container_name: ""
+    ports: !override
+      - 4010:4000
+    environment:
+      LOGFLARE_NODE_HOST: 127.0.0.1
+      DB_USERNAME: supabase_admin
+      DB_DATABASE: _supabase
+      DB_HOSTNAME: ${POSTGRES_HOST}
+      DB_PORT: ${POSTGRES_PORT}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_SCHEMA: _analytics
+      LOGFLARE_API_KEY: ${LOGFLARE_API_KEY}
+      LOGFLARE_SINGLE_TENANT: true
+      LOGFLARE_SUPABASE_MODE: true
+      LOGFLARE_MIN_CLUSTER_SIZE: 1
+      POSTGRES_BACKEND_URL: postgresql://supabase_admin:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/_supabase
+      POSTGRES_BACKEND_SCHEMA: _analytics
+      LOGFLARE_FEATURE_FLAG_OVERRIDE: multibackend=true
+
+  auth:
+    container_name: ""
+    # ports:
+    #   - 9999:9999  # Ensure unique port for auth
+
+  functions:
+    container_name: ""
+    ports:
+      - 5007:5007  # Match target and published ports
+
+  imgproxy:
+    container_name: ""
+    environment:
+      IMGPROXY_BIND: ":5005"  # Change internal binding to avoid conflicts
+
+# Kong Configuration specified in .env via KONG_HTTP_PORT and KONG_HTTPS_PORT
+  kong:
+    container_name: ""
+  #   ports:
+  #     - 5006:8000  # Match consulting firm ports
+  #     - 8446:8443
+
+  meta:
+    container_name: ""
+    environment:
+      PG_META_PORT: 8081  # Change internal binding for meta
+    ports:
+      - 8081:8081
+
+  realtime:
+    container_name: ""
+    environment:
+      PORT: 4011  # Change internal binding for realtime
+    ports:
+      - 4011:4011
+
+  rest:
+    container_name: ""
+    ports:
+      - 3001:3001  # Use different port than the default
+
+  storage:
+    container_name: ""
+    ports:
+      - 5002:5000  # Match target and published ports
+
+  studio:
+    container_name: ""
+    ports:
+      - 3002:3000  # Published port differs to avoid conflicts
+
+  supavisor:
+    container_name: ""
+    # supavisor configuration specified in .env via POSTGRES_PORT and POOLER_PROXY_PORT_TRANSACTION
+    # ports:
+    #   - 5434:5432
+    #   - 6544:6543 
+
+  vector:
+    container_name: ""
 
   db:
+    container_name: ""
+    ports:
+      - 5433:5432  # Published port differs for external accessibility
     volumes:
       - ./volumes/db/realtime.sql:/docker-entrypoint-initdb.d/migrations/99-realtime.sql:Z
       - ./volumes/db/webhooks.sql:/docker-entrypoint-initdb.d/init-scripts/98-webhooks.sql:Z
@@ -45,31 +128,48 @@ volumes:
   db-config:
 
 
-# PREVIOUSLY UNDER db:
-# image: supabase/postgres:15.1.1.78
-# container_name: supabase-db
-# healthcheck:
-#   test: pg_isready -U postgres -h localhost
-#   interval: 5s
-#   timeout: 5s
-#   retries: 10
-# depends_on:
-#   vector:
-#     condition: service_healthy
-# command:
-#   - postgres
-#   - -c
-#   - config_file=/etc/postgresql/postgresql.conf
-#   - -c
-#   - log_min_messages=fatal  # Prevents Realtime polling queries from appearing in logs
-# restart: unless-stopped
-# environment:
-#   POSTGRES_HOST: /var/run/postgresql
-#   PGPORT: ${POSTGRES_PORT}
-#   POSTGRES_PORT: ${POSTGRES_PORT}
-#   PGPASSWORD: ${POSTGRES_PASSWORD}
-#   POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-#   PGDATABASE: ${POSTGRES_DB}
-#   POSTGRES_DB: ${POSTGRES_DB}
-#   JWT_SECRET: ${JWT_SECRET}
-#   JWT_EXP: ${JWT_EXPIRY}
+
+# studio:
+  #   container_name: ""
+  # kong:
+  #   container_name: ""
+  #   ports:
+  #     - 5006:8000
+  #     - 8446:8443
+  # auth:
+  #   container_name: ""
+  # rest:
+  #   container_name: ""
+  #   ports:
+  #     - 3001:3000
+  # realtime:
+  #   container_name: ""
+  #   environment:
+  #     PORT: 4011
+  # storage:
+  #   container_name: ""
+  #   ports:
+  #     - 5002:5000
+  # imgproxy:
+  #   container_name: ""
+  #   environment:
+  #     IMGPROXY_BIND: ":5005"
+  # meta:
+  #   container_name: ""
+  #   environment:
+  #     PG_META_PORT: 8081
+  # functions:
+  #   container_name: ""
+  #   ports:
+  #     - 5007:4000
+  # analytics:
+  #   container_name: ""
+  #   ports:
+  #     - 4010:4000
+  # vector:
+  #   container_name: ""
+  # supavisor:
+  #   container_name: ""
+  #   ports:
+  #     - 6544:6543
+  #     - 5433:5432

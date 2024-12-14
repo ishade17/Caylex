@@ -156,6 +156,7 @@ def log_message(sender_division_id,
     # Insert the message into the sender's local database
     sender_result = supabase.table("messages").insert(message_entry).execute()
     print(f"inserted message into sender's local db: {sender_result}")
+
     # Send API request to receiver division to log the message in their database
     receiver_api_url = get_division_api_url(receiver_division_id)
     if not receiver_api_url:
@@ -177,9 +178,15 @@ def log_message(sender_division_id,
         "X-API-KEY": raw_api_key
     }
     print(f"about to hit the messages/receive endpoint")
+    logger.info(f"data_to_send: {data_to_send}")
+    print(f"data_to_send: {data_to_send}")
+    logger.info(f"headers: {headers}")
+    print(f"headers: {headers}")
+    logger.info(f"receiver_api_url: {receiver_api_url}")
+    print(f"receiver_api_url: {receiver_api_url}")
     response = requests.post(f"{receiver_api_url}/messages/receive", json=data_to_send, headers=headers)
-    logger.info(f"Message received response: {response.json()}")
-    print(f"Message received response: {response.json()}")
+    logger.info(f"Message received response: {response}")
+    print(f"Message received response: {response}")
     if is_2xx_status_code(response.status_code):
         receiver_response = response.json()
         receiver_message_id = receiver_response.get('message_id')
@@ -202,8 +209,10 @@ def get_raw_hashed_api_keys(sender_division_id,
         f"and(source_division_id.eq.{receiver_division_id},target_division_id.eq.{sender_division_id})"
     )
     # Query connections where the two divisions are connected, regardless of order
+    logger.info(f"in get_raw_hashed_api_keys() -- filter_string: {filter_string}")
     result = supabase.table("connections").select("raw_api_key").or_(filter_string).execute()
     raw_api_key = result.data[0]['raw_api_key']
+    logger.info(f"in get_raw_hashed_api_keys() -- raw_api_key: {raw_api_key}")
     hashed_api_key = hashlib.sha256(raw_api_key.encode()).hexdigest()
     return raw_api_key, hashed_api_key
 

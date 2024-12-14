@@ -128,8 +128,10 @@ def process_message(message_info):
         agent_response = call_customer_ai_agent(msg_context)
 
         # Check if the collaboration task is complete
-        # if agent_response == "TASK COMPLETE":
-        #     return agent_response
+        if agent_response == "TASK COMPLETE":
+            logger.info(f"Task is complete: {agent_response}")
+            print(f"Task is complete: {agent_response}")
+            return agent_response
 
         # Response to the sender division with the proper thread tag
         message_to_send = f"@thread_{message_info['thread_id']} @{message_info['sender_division_tag']} {agent_response}"

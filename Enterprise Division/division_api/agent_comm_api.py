@@ -1,6 +1,3 @@
-import hashlib
-import logging
-
 from flask import Flask, request, jsonify 
 from concurrent.futures import ThreadPoolExecutor
 
@@ -15,7 +12,7 @@ from present_message_with_context import present_message_with_context
 
 app = Flask(__name__)
 
-app.logger.handlers = logger.handlers
+# app.logger.handlers = logger.handlers
 app.logger.setLevel(logger.level)
 
 executor = ThreadPoolExecutor(max_workers=10)
@@ -118,7 +115,7 @@ def new_thread():
         logger.error(f"Error submitting task to ThreadPoolExecutor: {e}")
         print(f"Error submitting task to ThreadPoolExecutor: {e}")
 
-    # executor.submit(start_new_thread, message)
+    executor.submit(start_new_thread, message)
     return jsonify({"message": "New thread started"}), 200
 
 ### RECEIVE CONNECTION REQUESTS ###
@@ -266,19 +263,17 @@ docker exec division-api-server curl -X POST http://division-api:8002/message/re
   
 
 # this is a message being sent out from saas_customer_success (the division we're testing on) on a new thread
-docker exec division-api-server curl -X POST http://division-api:8002/message/new_thread \
+docker exec saas_customer_success-division-api-1 curl -X POST http://localhost:8002/message/new_thread \
   -H "Content-Type: application/json" \
   -H "X-API-KEY: 8d625c78b565f0b3d6684c10a4660a2f8c6e88bcffc2aebebade1862dab945ff" \
-  -d '{
-    "message": "@consulting_firm_acct please devise a plan for building a custom data pipeline that intakes news articles and outputs summaries @new_thread"
-}'
+  -d "{\"message\": \"@consulting_firm_acct @new_thread Let's design a custom data pipeline that pulls public financial data for a given stock over the past week using the public yahoo finance API then pairs this information with relevant news for the company over the past week using the Perplexity API. I want you to write the first version of code for this pipeline.\"}"
 
 # this is a message being sent out from saas_customer_success (the division we're testing on) on an existing thread
-docker exec division-api-server curl -X POST http://division-api:8002/message/new_thread \
+docker exec saas_customer_success-division-api-1 curl -X POST http://localhost:8002/message/new_thread \
   -H "Content-Type: application/json" \
   -H "X-API-KEY: 8d625c78b565f0b3d6684c10a4660a2f8c6e88bcffc2aebebade1862dab945ff" \
   -d '{
-    "message": "@consulting_firm_acct second message @thread_6"
+    "message": "@consulting_firm_acct second message @new_thread"
 }'
 
 

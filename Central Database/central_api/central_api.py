@@ -172,6 +172,7 @@ def get_division_by_tag(division_tag):
     try:
         result = supabase.table("divisions").select("*").eq("tag", division_tag).execute()
         if not result.data:
+            logger.error(f"Division with tag {division_tag} not found.")
             abort(404, description="Division not found")
         return jsonify(result.data[0]), 200
     except Exception as e:

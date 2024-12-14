@@ -35,7 +35,8 @@ if not logger.handlers:
     logger.addHandler(stream_handler)
 
 # Ensure thread-safe logging
-logger.propagate = False
+# logger.propagate = False
+logger.propagate = True
 
 # Load environment variables from .env file
 load_dotenv()
@@ -49,10 +50,13 @@ load_dotenv()
 supabase_url = os.getenv('SUPABASE_URL')
 supabase_key = os.getenv('SUPABASE_KEY')
 
+logger.info(f"supabase_url: {supabase_url}, supabase_key: {supabase_key}")
+print(f"supabase_url: {supabase_url}, supabase_key: {supabase_key}")
+
 if not supabase_url:
-    raise EnvironmentError("SUPABASE_URL must be set in environment variables.")
+    raise EnvironmentError(f"SUPABASE_URL must be set in environment variables: {supabase_url}")
 if not supabase_key:
-    raise EnvironmentError("SUPABASE_KEY/SERVICE_ROLE_KEY must be set in environment variables.")
+    raise EnvironmentError(f"SUPABASE_KEY (which is loaded in from SERVICE_ROLE_KEY) must be set in environment variables: {supabase_key}")
 
 
 supabase: Client = create_client(supabase_url, supabase_key)
